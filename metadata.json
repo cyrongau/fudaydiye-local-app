@@ -1,0 +1,9 @@
+{
+  "name": "Fudaydiye - Multi-Vendor Platform",
+  "description": "A commerce and logistics platform for Somaliland, featuring AI-powered voice search and live seller nodes.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

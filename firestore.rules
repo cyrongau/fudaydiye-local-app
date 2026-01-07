@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: User checks
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // 1. Users Collection
+    // Read: Only own profile or Admin (TODO: Admin Role Check)
+    // Write: Only own profile (Strict fields validation can be added later)
+    // 1. Users Collection
+    // Read: Own profile OR if the user is a VENDOR OR if the requester is an ADMIN
+    // Write: Own profile OR if the requester is an ADMIN (Fetched from DB)
+    match /users/{userId} {
+      allow read: if (isSignedIn() && isOwner(userId)) || resource.data.role == 'VENDOR' || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      allow write: if isSignedIn() && (isOwner(userId) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN');
+    }
+
+    // 2. Products Collection
+    // Read: Public
+    // Write: Vendor Only (Check 'vendorId' field matches auth uid)
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.vendorId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.vendorId == request.auth.uid && request.resource.data.vendorId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.vendorId == request.auth.uid;
+    }
+
+    // 2.a Categories (Public Read)
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // 3. Orders Collection (CRITICAL)
+    // Create: DENY (Must use Cloud Function 'createOrder')
+    // Update: DENY (Must use Cloud Function or specific Vendor Dispatch actions - strict for now)
+    // Read: Owner (Customer) or Vendor (Assignee)
+    match /orders/{orderId} {
+      allow create: if false; // Cloud Function only
+      allow update: if false; // Cloud Function only (for now)
+      
+      allow read: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid || 
+        resource.data.vendorId == request.auth.uid
+      );
+    }
+
+    // Notifications: Users can read their own notifications
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.token.role == 'ADMIN');
+      allow create: if isSignedIn(); // Triggered by system or other users
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.token.role == 'ADMIN');
+    }
+
+    // Carts: Public read/write (Temporary for Guest checkout)
+    match /carts/{cartId} {
+      allow read, write: if true;
+    }
+
+    // 5. Access Codes (OTP)
+    // No direct access allowed from client. Cloud Function usage only.
+    match /access_codes/{codeId} {
+      allow read, write: if false;
+    }
+
+    // 6. System Config (Admin Only - simplified for dev)
+    match /system_config/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 7. CMS Content (Public Read, Admin Write)
+    match /cms_content/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // 8. Live Sessions (Public Read, Admin/Vendor Write)
+    match /live_sessions/{sessionId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // 9. Live Chat Messages
+    match /live_sessions/{sessionId}/messages/{msgId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+    }
+
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

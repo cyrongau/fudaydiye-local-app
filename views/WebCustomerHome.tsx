@@ -1,0 +1,456 @@
+
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useCart, useAuth } from '../Providers';
+import { collection, query, orderBy, onSnapshot, limit, where, getDoc, doc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { Product, CMSContent, CategoryNode, LiveSaleSession, UserProfile } from '../types';
+import VendorTicker from '../components/VendorTicker';
+import CategoryRail from '../components/CategoryRail';
+
+const WebCustomerHome: React.FC = () => {
+
+   const navigate = useNavigate();
+   const { addToCart } = useCart();
+   const [products, setProducts] = useState<Product[]>([]);
+   const [heroSlides, setHeroSlides] = useState<CMSContent[]>([]);
+   const [categories, setCategories] = useState<CategoryNode[]>([]);
+   const [liveSessions, setLiveSessions] = useState<LiveSaleSession[]>([]);
+   const [featuredLive, setFeaturedLive] = useState<LiveSaleSession | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [activeHero, setActiveHero] = useState(0);
+   const [activeTab, setActiveTab] = useState<'NEW' | 'BEST' | 'POPULAR'>('NEW');
+
+   const [mobileAds, setMobileAds] = useState<CMSContent[]>([]);
+
+   useEffect(() => {
+      // Categories
+      const unsubCats = onSnapshot(query(collection(db, "categories"), where("parentId", "==", null), limit(8)), (snap) => {
+         if (!snap.empty) {
+            setCategories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryNode)));
+         } else {
+            // Fallback Mock Data
+            setCategories([
+               { id: '1', name: 'Fashion', icon: 'checkroom', slug: 'fashion', parentId: null },
+               { id: '2', name: 'Electronics', icon: 'devices', slug: 'electronics', parentId: null },
+               { id: '3', name: 'Home', icon: 'chair', slug: 'home', parentId: null },
+               { id: '4', name: 'Beauty', icon: 'face', slug: 'beauty', parentId: null },
+               { id: '5', name: 'Fresh', icon: 'restaurant', slug: 'fresh', parentId: null },
+               { id: '6', name: 'Mobiles', icon: 'smartphone', slug: 'mobiles', parentId: null },
+            ]);
+         }
+      });
+
+      // Dynamic Hero Slides
+      const unsubHero = onSnapshot(query(collection(db, "cms_content"), where("type", "==", "HOME_SLIDER"), where("status", "==", "PUBLISHED"), limit(5)), (snap) => {
+         setHeroSlides(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CMSContent)));
+      });
+
+      // Mobile Ads
+      const unsubAds = onSnapshot(query(collection(db, "cms_content"), where("type", "==", "MOBILE_AD"), where("status", "==", "PUBLISHED"), limit(5)), (snap) => {
+         setMobileAds(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CMSContent)));
+      });
+
+      // Sync Featured Node
+      const unsubFeatured = onSnapshot(query(collection(db, "live_sessions"), where("isFeatured", "==", true), limit(1)), (snap) => {
+         if (!snap.empty) setFeaturedLive({ id: snap.docs[0].id, ...snap.docs[0].data() } as LiveSaleSession);
+         else setFeaturedLive(null);
+      });
+
+      // Active Live Sale Sessions
+      const unsubLive = onSnapshot(query(collection(db, "live_sessions"), where("status", "==", "LIVE"), limit(8)), (snap) => {
+         setLiveSessions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LiveSaleSession)));
+      });
+
+      // Products Feed - HARD FILTER for Suspended Vendors
+      setLoading(true);
+      // Note: Ideally, products should have a 'vendorStatus' field denormalized, 
+      // or we filter client-side if dataset is small. For now we assume products of suspended vendors 
+      // might still be 'ACTIVE' but we should filter them if we joined data. 
+      // Since NoSQL joins are hard, we rely on the backend function to mark products as 'INACTIVE' when suspending.
+      // However, for immediate safety, we can try to filter client side if we had the vendor list.
+      // BUT, the most robust way is to query only ACTIVE products. 
+      // The Admin 'Suspend' action should ideally update all products to 'SUSPENDED' or 'INACTIVE'.
+      // If we cannot trust that, we rely on 'status == ACTIVE'.
+      let qProd = query(collection(db, "products"), where("status", "==", "ACTIVE"), limit(10));
+      if (activeTab === 'NEW') qProd = query(collection(db, "products"), where("status", "==", "ACTIVE"), orderBy("createdAt", "desc"), limit(10));
+      else if (activeTab === 'POPULAR') qProd = query(collection(db, "products"), where("status", "==", "ACTIVE"), orderBy("rating", "desc"), limit(10));
+
+      const unsubProd = onSnapshot(qProd, (snapshot) => {
+         setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+         setLoading(false);
+      });
+
+      return () => { unsubCats(); unsubHero(); unsubAds(); unsubFeatured(); unsubLive(); unsubProd(); };
+   }, [activeTab]);
+
+   useEffect(() => {
+      if (heroSlides.length > 1) {
+         const timer = setInterval(() => setActiveHero(prev => (prev + 1) % heroSlides.length), 10000);
+         return () => clearInterval(timer);
+      }
+   }, [heroSlides]);
+
+   return (
+      <div className="flex flex-col animate-in fade-in duration-700 bg-background-light dark:bg-background-dark font-display w-full overflow-x-hidden">
+
+         {/* 1. Dynamic Hero Slider (Desktop) / Eid Sale Banner (Mobile) */}
+         <section className="relative w-full">
+            {/* Desktop Only Hero */}
+            <div className="hidden md:block h-[85vh] bg-secondary overflow-hidden relative group shadow-2xl">
+               {heroSlides.length === 0 ? (
+                  /* Static Fallback Slide */
+                  <div className="absolute inset-0 transition-opacity duration-1000 opacity-100">
+                     <div className="absolute inset-0"><img src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=1600" className="w-full h-full object-cover grayscale-[30%] brightness-75" alt="Fallback Hero" /><div className="absolute inset-0 bg-gradient-to-r from-secondary via-secondary/70 to-transparent"></div></div>
+                     <div className="relative z-10 h-full px-24 flex flex-col justify-center items-start text-left">
+                        <div className="max-w-3xl space-y-6">
+                           <span className="bg-primary text-secondary px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-[0.3em] shadow-2xl inline-block">Welcome to Fudaydiye</span>
+                           <h1 className="text-8xl font-black text-white tracking-tight uppercase leading-[0.85]">Empowering<br />Local Commerce</h1>
+                           <p className="text-white/80 text-lg font-medium max-w-xl">Connecting vendors, riders, and customers in a seamless ecosystem.</p>
+                           <button onClick={() => navigate('/customer/explore')} className="h-20 px-16 bg-primary text-secondary font-black text-sm uppercase tracking-[0.2em] rounded-2xl shadow-primary-glow active:scale-95 transition-all">Start Exploring</button>
+                        </div>
+                     </div>
+                  </div>
+               ) : (
+                  heroSlides.map((slide, idx) => (
+                     <div key={idx} className={`absolute inset-0 transition-all duration-1000 ${activeHero === idx ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}>
+                        <div className="absolute inset-0"><img src={slide.featuredImage} className="w-full h-full object-cover grayscale-[30%] brightness-75" alt="" /><div className="absolute inset-0 bg-gradient-to-r from-secondary via-secondary/70 to-transparent"></div></div>
+                        <div className="relative z-10 h-full px-24 flex flex-col justify-center items-start text-left">
+                           <div className="max-w-3xl space-y-6">
+                              <span className="bg-primary text-secondary px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-[0.3em] shadow-2xl inline-block">{slide.category}</span>
+                              <h1 className="text-8xl font-black text-white tracking-tight uppercase leading-[0.85]">{slide.title}</h1>
+                              <button onClick={() => navigate(slide.ctaLink || '/customer/explore')} className="h-20 px-16 bg-primary text-secondary font-black text-sm uppercase tracking-[0.2em] rounded-2xl shadow-primary-glow active:scale-95 transition-all">{slide.ctaText}</button>
+                           </div>
+                           {slide.linkedProductId && <HeroProductCard productId={slide.linkedProductId} />}
+                        </div>
+                     </div>
+                  ))
+               )}
+            </div>
+
+            {/* Mobile Optimized Hero (Eid Sale) */}
+            <div className="md:hidden px-4 pt-4 space-y-4">
+               {/* Main Banner */}
+               <div className="rounded-[24px] bg-[#0A4D46] p-6 text-white relative overflow-hidden shadow-lg h-[180px] flex flex-col justify-center">
+                  <div className="absolute right-[-20px] top-0 bottom-0 w-[140px] bg-[url('https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400')] bg-cover bg-center mask-image-gradient"></div>
+                  <div className="relative z-10 max-w-[65%]">
+                     <span className="bg-[#06DC7F] text-[#015754] text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider mb-2 inline-block">Eid Sale</span>
+                     <h2 className="text-2xl font-black leading-tight mb-1">Up to 50% Off</h2>
+                     <p className="text-[10px] opacity-80 mb-4">On Electronics & Fashion</p>
+                     <button onClick={() => navigate('/customer/explore')} className="bg-white text-[#015754] text-[10px] font-bold px-4 py-2 rounded-lg">Shop Now</button>
+                  </div>
+               </div>
+
+               {/* Live Banner Compact - Dynamic */}
+               {(featuredLive || liveSessions.length > 0) && (() => {
+                  const targetSession = featuredLive || liveSessions[0];
+                  return (
+                     <div onClick={() => navigate(`/customer/live/${targetSession.id}`)} className="rounded-[20px] bg-[#015754] p-4 flex items-center justify-between text-white shadow-md cursor-pointer border border-white/10 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-[#015754] to-transparent z-0"></div>
+                        {targetSession.featuredProductImg && <img src={targetSession.featuredProductImg} className="absolute right-0 top-0 bottom-0 w-24 object-cover opacity-20 mask-image-linear-to-l" alt="" />}
+
+                        <div className="flex flex-col relative z-10 max-w-[70%]">
+                           <div className="flex items-center gap-2 mb-1">
+                              <span className="size-2 bg-[#06DC7F] rounded-full animate-pulse shadow-[0_0_8px_#06DC7F]"></span>
+                              <span className="text-[10px] font-bold text-[#06DC7F] uppercase tracking-wider">Live Now</span>
+                           </div>
+                           <h3 className="text-lg font-black leading-none truncate">{targetSession.title}</h3>
+                           <p className="text-[9px] opacity-70 truncate">{targetSession.vendorName} • {targetSession.viewerCount || 0} Watching</p>
+                        </div>
+                        <button className="bg-[#06DC7F] text-[#015754] px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 z-10 shadow-lg">
+                           Join <span className="material-symbols-outlined text-[12px]">arrow_forward</span>
+                        </button>
+                     </div>
+                  );
+               })()}
+            </div>
+         </section >
+
+         {/* 2. Category Rail (Scroll Mobile / Grid Desktop) */}
+         < CategoryRail categories={categories} />
+
+         {/* 3. Flash Deals (Horizontal Scroll) */}
+         < section className="py-2 px-4 mb-4" >
+            <div className="flex items-center justify-between mb-3">
+               <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-black text-secondary dark:text-white">Flash Deals</h3>
+                  <span className="bg-[#FFEAEA] text-red-500 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">timer</span> 02:15:48</span>
+               </div>
+               <button className="text-[10px] font-bold text-[#06DC7F]">See All</button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
+               {products.slice(0, 12).map(prod => (
+                  <div key={prod.id} onClick={() => navigate(`/customer/product/${prod.id}`)} className="bg-white dark:bg-white/5 rounded-xl p-2 shadow-sm border border-gray-100 dark:border-white/5 relative group cursor-pointer">
+                     <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded z-10">-45%</span>
+                     <div className="aspect-square bg-gray-50 dark:bg-black/20 rounded-lg mb-2 overflow-hidden relative">
+                        <img src={prod.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                     </div>
+                     <h4 className="text-[11px] font-bold text-gray-700 dark:text-gray-200 truncate mb-1">{prod.name}</h4>
+                     <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-[#06DC7F]">${Math.round(prod.basePrice * 0.55)}</span>
+                        <span className="text-[10px] text-gray-400 line-through">${prod.basePrice}</span>
+                     </div>
+                  </div>
+               ))}
+            </div>
+         </section >
+
+         {/* 4. New Arrivals (Grid) */}
+         < section className="px-4 pb-20" >
+            <h3 className="text-lg font-black text-secondary dark:text-white mb-4">New Arrivals</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
+               {products.map(prod => (
+                  <div key={prod.id} onClick={() => navigate(`/customer/product/${prod.id}`)} className="bg-white dark:bg-white/5 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-white/5 relative group">
+                     <div className="aspect-square bg-[#F5F5F7] dark:bg-black/30 rounded-xl mb-3 overflow-hidden relative">
+                        <img src={prod.images[0]} className="w-full h-full object-mix-blend-multiply dark:mix-blend-normal" />
+                        <button className="absolute top-2 right-2 size-6 bg-white rounded-full shadow flex items-center justify-center text-gray-400 hover:text-red-500"><span className="material-symbols-outlined text-[14px]">favorite</span></button>
+                     </div>
+                     <h4 className="text-[11px] font-medium text-gray-600 dark:text-gray-300 leading-tight mb-1 h-8 line-clamp-2">{prod.name}</h4>
+                     <div className="flex items-center justify-between">
+                        <span className="text-sm font-black text-secondary dark:text-white">${prod.basePrice}</span>
+                        <button onClick={(e) => { e.stopPropagation(); addToCart({ productId: prod.id, name: prod.name, price: prod.basePrice, qty: 1, img: prod.images[0], vendor: prod.vendor, vendorId: prod.vendorId, attribute: 'Standard' }); }} className="size-7 bg-[#015754] text-white rounded-lg flex items-center justify-center">
+                           <span className="material-symbols-outlined text-[16px]">add</span>
+                        </button>
+                     </div>
+                  </div>
+               ))}
+            </div>
+         </section >
+
+         {/* Mobile Ad Slider (Mobile Only) */}
+         {
+            mobileAds.length > 0 && (
+               <section className="mb-8 px-4 md:hidden">
+                  <h3 className="text-lg font-black text-secondary dark:text-white mb-4">Sponsored</h3>
+                  <div className="overflow-x-auto flex gap-4 snap-x no-scrollbar pb-4">
+                     {mobileAds.map(ad => (
+                        <div key={ad.id} className="min-w-[85vw] snap-center">
+                           {ad.adFormat === 'PRODUCT_CARD' ? (
+                              <div className="bg-white dark:bg-white/5 p-4 rounded-[24px] border border-gray-100 dark:border-white/5 shadow-md flex gap-4 items-center" onClick={() => navigate(ad.ctaLink || `/customer/product/${ad.linkedProductId}`)}>
+                                 <div className="size-24 rounded-2xl bg-gray-100 dark:bg-white/5 flex-shrink-0 overflow-hidden">
+                                    {/* Placeholder if no product data yet, ideal would be to fetch linked product */}
+                                    <img src="https://picsum.photos/200" className="w-full h-full object-cover" />
+                                 </div>
+                                 <div className="flex-1">
+                                    <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Featured</span>
+                                    <h4 className="text-sm font-black text-secondary dark:text-white leading-tight mb-2">{ad.title}</h4>
+                                    <button className="bg-secondary text-white text-[10px] font-bold px-4 py-2 rounded-lg">{ad.ctaText || 'Shop Now'}</button>
+                                 </div>
+                              </div>
+                           ) : (
+                              <div className="relative h-48 rounded-[24px] overflow-hidden shadow-lg" onClick={() => navigate(ad.ctaLink || '#')}>
+                                 <img src={ad.featuredImage} className="absolute inset-0 w-full h-full object-cover" alt={ad.title} />
+                                 <div className="absolute inset-0 bg-black/20"></div>
+                                 <div className="absolute bottom-4 left-4 right-4">
+                                    <h4 className="text-xl font-black text-white leading-none mb-2">{ad.title}</h4>
+                                    <button className="bg-white text-secondary text-[10px] font-bold px-4 py-2 rounded-lg">{ad.ctaText || 'Shop Now'}</button>
+                                 </div>
+                              </div>
+                           )}
+                        </div>
+                     ))}
+                  </div>
+               </section>
+            )
+         }
+
+         {/* Featured Live Session (Mobile Highlight) */}
+         {
+            featuredLive && (
+               <section className="px-4 mb-20 md:hidden">
+                  <div className="rounded-[32px] bg-[#2A0A18] relative overflow-hidden text-white shadow-2xl border border-white/10">
+                     <div className="absolute inset-0">
+                        <img src={featuredLive.featuredProductImg} className="w-full h-full object-cover opacity-60 mix-blend-overlay" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/50"></div>
+                     </div>
+                     <div className="relative z-10 p-6 flex flex-col items-center text-center space-y-4">
+                        <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full animate-pulse shadow-lg">
+                           <span className="material-symbols-outlined text-[14px]">videocam</span>
+                           <span className="text-[10px] font-black uppercase tracking-widest">Live Now</span>
+                        </div>
+                        <div className="size-16 rounded-full border-2 border-[#06DC7F] p-1 mb-2">
+                           <img src={featuredLive.hostAvatar || "https://ui-avatars.com/api/?name=" + featuredLive.vendorName} className="w-full h-full rounded-full object-cover" />
+                        </div>
+                        <div>
+                           <h3 className="text-2xl font-black uppercase leading-none mb-1">{featuredLive.title}</h3>
+                           <p className="text-xs text-white/70 font-medium">with {featuredLive.vendorName}</p>
+                        </div>
+                        <button onClick={() => navigate(`/customer/live/${featuredLive.id}`)} className="w-full h-12 bg-[#06DC7F] text-[#015754] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-transform flex items-center justify-center gap-2">
+                           Join Session <span className="material-symbols-outlined">arrow_forward</span>
+                        </button>
+                     </div>
+                  </div>
+               </section>
+            )
+         }
+
+         {/* Feature Blocks */}
+         <section className="bg-white dark:bg-surface-dark py-10 border-b border-gray-100 dark:border-white/5">
+            <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
+               <FeatureItem icon="bolt" label="Atomic Dispatch" sub="60min Delivery" />
+               <FeatureItem icon="verified_user" label="Mobile Pay" sub="Secured API" />
+               <FeatureItem icon="history" label="30 Day Return" sub="100% Refundable" />
+               <FeatureItem icon="support_agent" label="Live Hub" sub="24/7 Priority" />
+            </div>
+         </section>
+
+         {/* Taxonomy Strip */}
+         <section className="py-8 md:py-20 px-6">
+            <div className="max-w-7xl mx-auto text-center mb-6 md:mb-12">
+               <h2 className="text-3xl md:text-5xl font-black text-secondary dark:text-white uppercase tracking-tighter">Browse Hubs</h2>
+               <div className="h-1 w-20 bg-primary mx-auto mt-4 rounded-full"></div>
+            </div>
+            <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-6 md:gap-12">
+               {categories.map((cat) => (
+                  <button key={cat.id} onClick={() => navigate(`/customer/category/${cat.name.toLowerCase()}`)} className="flex flex-col items-center gap-4 group">
+                     <div className="size-20 md:size-28 rounded-full bg-primary/10 flex items-center justify-center border-2 border-transparent group-hover:border-primary group-hover:shadow-primary-glow transition-all relative overflow-hidden">
+                        {cat.imageUrl ? <img src={cat.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-20 grayscale group-hover:grayscale-0 group-hover:opacity-40 transition-all" /> : <div className="absolute inset-0 bg-primary opacity-5"></div>}
+                        <span className="material-symbols-outlined text-[32px] md:text-[42px] text-primary group-hover:scale-110 transition-transform relative z-10">{cat.icon || 'category'}</span>
+                     </div>
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 group-hover:text-primary transition-colors">{cat.name}</span>
+                  </button>
+               ))}
+            </div>
+         </section>
+
+         {/* Restored Category Banner Ads Section */}
+         <section className="py-6 md:py-12 px-6 max-w-7xl mx-auto flex gap-4 md:gap-8 overflow-x-auto snap-x no-scrollbar pb-6 flex-nowrap">
+            <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Smart Tech" promo="Up to 40% Off" img="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=1200" tag="Electronics Hub" link="/customer/category/electronics" /></div>
+            <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Luxe Beauty" promo="New Arrivals" img="https://images.unsplash.com/photo-1596462502278-27bfad4575a6?q=80&w=1200" tag="Cosmetic Node" orange link="/customer/category/beauty" /></div>
+            <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Home Living" promo="Free Shipping" img="https://images.unsplash.com/photo-1484101403633-562f891dc89a?q=80&w=1200" tag="Interior Mesh" link="/customer/category/home" /></div>
+         </section>
+
+         {/* Main Feed */}
+         <section className="py-10 px-6 bg-gray-50/50 dark:bg-black/10">
+            <div className="max-w-7xl mx-auto">
+               <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
+                  <div className="flex bg-white dark:bg-surface-dark p-1.5 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5">
+                     <TabBtn label="New Shipments" active={activeTab === 'NEW'} onClick={() => setActiveTab('NEW')} />
+                     <TabBtn label="Best Selling" active={activeTab === 'BEST'} onClick={() => setActiveTab('BEST')} />
+                     <TabBtn label="Top Rated" active={activeTab === 'POPULAR'} onClick={() => setActiveTab('POPULAR')} />
+                  </div>
+                  <button onClick={() => navigate('/customer/explore')} className="text-primary text-[10px] font-black uppercase tracking-[0.3em] border-b-2 border-primary pb-1">Full Dispatch Ledger</button>
+               </div>
+               {loading ? <div className="grid grid-cols-2 lg:grid-cols-5 gap-8">{[...Array(10)].map((_, i) => <div key={i} className="aspect-[3/4] rounded-[32px] bg-white dark:bg-white/5 animate-pulse shadow-sm"></div>)}</div> :
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 md:gap-8">
+                     {products.map(prod => <ProductCard key={prod.id} product={prod} />)}
+                  </div>
+               }
+            </div>
+         </section>
+
+         <section className="py-6 md:py-20 px-6 max-w-7xl mx-auto flex gap-4 md:gap-8 overflow-x-auto snap-x no-scrollbar pb-6 flex-nowrap">
+            <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Men's Fashion" promo="Flat 70% Off" img="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=1200" tag="Weekend Sale" link="/customer/category/fashion" /></div>
+            <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Women's Wear" promo="Min. 35% Off" img="https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=800" tag="Fashion Style" orange link="/customer/category/fashion" /></div>
+            <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Accessories" promo="Verified Quality" img="https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=1200" tag="Premium Gear" link="/customer/category/accessories" /></div>
+         </section>
+
+         {/* Vendor Logo Slider - Infinite Scroll Marquee */}
+         <VendorTicker />
+      </div >
+   );
+};
+
+const FeatureItem = ({ icon, label, sub }: any) => (
+   <div className="flex items-center gap-5 group">
+      <div className="size-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner border border-primary/20 group-hover:bg-primary group-hover:text-secondary transition-all"><span className="material-symbols-outlined text-3xl font-black">{icon}</span></div>
+      <div><h4 className="text-xs font-black text-secondary dark:text-white uppercase tracking-widest leading-none mb-1.5">{label}</h4><p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">{sub}</p></div>
+   </div>
+);
+
+const TabBtn = ({ label, active, onClick }: any) => (
+   <button onClick={onClick} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${active ? 'bg-primary text-secondary shadow-lg' : 'text-gray-400 hover:text-secondary dark:hover:text-white'}`}>{label}</button>
+);
+
+const PromoBanner = ({ title, promo, img, tag, orange, link }: any) => {
+   const navigate = useNavigate();
+   return (
+      <div onClick={() => navigate(link || '/customer/explore')} className={`h-60 md:h-80 rounded-[32px] md:rounded-[48px] ${orange ? 'bg-[#F9F0EE]' : 'bg-secondary'} p-6 md:p-10 relative overflow-hidden group cursor-pointer shadow-xl border border-white/5`}>
+         <div className={`absolute inset-0 bg-cover bg-center ${orange ? '' : 'opacity-30 grayscale'} group-hover:scale-105 transition-transform duration-[10s]`} style={{ backgroundImage: `url("${img}")` }}></div>
+         <div className="relative z-10 space-y-4 md:space-y-6">
+            <span className={`text-[9px] font-black ${orange ? 'text-orange-500' : 'text-primary'} uppercase tracking-[0.4em]`}>{tag}</span>
+            <h3 className={`text-2xl md:text-3xl font-black ${orange ? 'text-secondary' : 'text-white'} leading-none uppercase tracking-tighter`}>{title}<br /><span className={orange ? 'text-orange-500' : 'text-primary'}>{promo}</span></h3>
+            <button className={`h-10 px-6 ${orange ? 'bg-secondary text-white' : 'bg-white text-secondary'} rounded-xl text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all`}>Shop Now</button>
+         </div>
+      </div>
+   );
+};
+
+const LiveCard: React.FC<{ session: LiveSaleSession; onClick: () => void }> = ({ session, onClick }) => (
+   <div onClick={onClick} className="relative aspect-[3/4] rounded-[40px] md:rounded-[56px] overflow-hidden bg-black shadow-2xl cursor-pointer group border border-white/10">
+      <img src={session.featuredProductImg} className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-[8s]" alt="" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+      <div className="absolute top-4 left-4 md:top-8 md:left-8 flex flex-col gap-2">
+         <div className="bg-red-600 text-white text-[8px] md:text-[10px] font-black px-3 py-1 rounded-xl uppercase tracking-widest flex items-center gap-2 shadow-xl border border-white/10 w-fit">
+            <span className="size-1.5 md:size-2 bg-white rounded-full animate-pulse shadow-[0_0_8px_#fff]"></span> Live
+         </div>
+         <div className="bg-black/40 backdrop-blur-md text-white text-[8px] md:text-[10px] font-black px-3 py-1 rounded-xl uppercase tracking-widest border border-white/10 w-fit">{session.viewerCount} Watching</div>
+      </div>
+      <div className="absolute bottom-6 left-6 right-6 md:bottom-10 md:left-10 md:right-10">
+         <h3 className="text-sm md:text-xl font-black text-white uppercase tracking-tight leading-tight mb-2 group-hover:text-primary transition-colors duration-500 truncate">{session.title}</h3>
+         <p className="text-[9px] md:text-[11px] font-bold text-white/50 uppercase tracking-[0.2em]">{session.vendorName}</p>
+      </div>
+   </div>
+);
+
+const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
+   const navigate = useNavigate();
+   const { addToCart } = useCart();
+   const disc = product.salePrice ? Math.round((1 - product.salePrice / product.basePrice) * 100) : 0;
+   return (
+      <div onClick={() => navigate(`/customer/product/${product.id}`)} className="bg-white dark:bg-surface-dark rounded-[40px] p-5 border border-gray-100 dark:border-white/5 shadow-soft group hover:-translate-y-2 transition-all cursor-pointer flex flex-col h-full">
+         <div className="relative aspect-square rounded-[32px] overflow-hidden bg-gray-50 dark:bg-black/20 mb-5 shadow-inner">
+            <img src={product.images?.[0] || 'https://picsum.photos/400/400'} className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-[2s]" alt="" />
+            {disc > 0 && <div className="absolute top-4 left-4 bg-red-600 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest shadow-lg">-{disc}%</div>}
+         </div>
+         <div className="flex-1 flex flex-col">
+            <span className="text-[9px] font-black text-primary uppercase tracking-[0.3em] truncate max-w-[100px]">{product.vendor}</span>
+            <h4 className="text-sm font-black text-secondary dark:text-white uppercase leading-tight line-clamp-2 mb-6 tracking-tight">{product.name}</h4>
+            <div className="mt-auto flex items-center justify-between pt-4 border-t border-gray-50 dark:border-white/5">
+               <span className="text-lg font-black text-secondary dark:text-white tracking-tighter">${product.salePrice || product.basePrice}</span>
+               <button onClick={(e) => { e.stopPropagation(); addToCart({ productId: product.id, name: product.name, price: product.salePrice || product.basePrice, qty: 1, img: product.images[0], vendor: product.vendor, vendorId: product.vendorId, attribute: 'Standard' }); }} className="size-11 rounded-xl shadow-2xl flex items-center justify-center active:scale-90 transition-all group/btn bg-secondary text-primary hover:bg-primary hover:text-secondary"><span className="material-symbols-outlined font-black text-2xl">shopping_bag</span></button>
+            </div>
+         </div>
+      </div>
+   );
+};
+
+const HeroProductCard: React.FC<{ productId: string }> = ({ productId }) => {
+   const navigate = useNavigate();
+   const { addToCart } = useCart();
+   const [product, setProduct] = useState<Product | null>(null);
+
+   useEffect(() => {
+      const fetchP = async () => {
+         const snap = await getDoc(doc(db, "products", productId));
+         if (snap.exists()) setProduct({ id: snap.id, ...snap.data() } as Product);
+      };
+      if (productId) fetchP();
+   }, [productId]);
+
+   if (!product) return null;
+
+   return (
+      <div onClick={(e) => { e.stopPropagation(); navigate(`/customer/product/${product.id}`); }} className="absolute right-32 top-1/2 -translate-y-1/2 w-[320px] bg-white dark:bg-surface-dark rounded-[32px] p-4 shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] backdrop-blur-md animate-in slide-in-from-right-10 duration-700 cursor-pointer group hover:scale-105 transition-transform z-20">
+         <div className="aspect-square rounded-[24px] bg-gray-50 dark:bg-white/5 overflow-hidden mb-4 relative">
+            <img src={product.images?.[0]} className="w-full h-full object-cover" alt={product.name} />
+            <div className="absolute top-2 right-2 bg-secondary/80 text-white text-[10px] font-black px-2 py-1 rounded-lg backdrop-blur-sm shadow-sm">${product.basePrice}</div>
+         </div>
+         <div>
+            <h4 className="text-sm font-black text-secondary dark:text-white leading-tight line-clamp-2 mb-1">{product.name}</h4>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{product.vendor}</p>
+            <button
+               onClick={(e) => {
+                  e.stopPropagation();
+                  addToCart({ productId: product.id, name: product.name, price: product.salePrice || product.basePrice, qty: 1, img: product.images[0], vendor: product.vendor, vendorId: product.vendorId, attribute: 'Standard' });
+               }}
+               className="w-full h-10 bg-primary text-secondary rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-secondary hover:text-white transition-colors flex items-center justify-center gap-2"
+            >
+               Add to Cart <span className="material-symbols-outlined text-[14px]">shopping_cart</span>
+            </button>
+         </div>
+      </div>
+   );
+};
+
+export default WebCustomerHome;
