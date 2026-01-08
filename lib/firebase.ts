@@ -6,13 +6,13 @@ import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAGrYetS7qHs0dUi9zMaNubpPoWsIqlvbY",
-  authDomain: "fudaydiye-commerce.firebaseapp.com",
-  projectId: "fudaydiye-commerce",
-  storageBucket: "fudaydiye-commerce.firebasestorage.app",
-  messagingSenderId: "309029801159",
-  appId: "1:309029801159:web:68d82c70f4a506560002e2",
-  measurementId: "G-9KM81N4EQX"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase

@@ -209,9 +209,10 @@ export interface LiveSaleSession {
 
 export interface CMSContent {
   id: string;
-  type: 'PAGE' | 'BLOG' | 'FAQ' | 'HOME_SLIDER' | 'SHOP_SLIDER' | 'MOBILE_AD';
+  type: 'PAGE' | 'BLOG' | 'FAQ' | 'HOME_SLIDER' | 'SHOP_SLIDER' | 'MOBILE_AD' | 'PROMO_CARD';
   title: string;
   subtitle?: string;
+  section?: 'HOME_TOP_ROW' | 'HOME_BOTTOM_ROW';
   slug: string;
   status: 'DRAFT' | 'PUBLISHED';
   category: string;

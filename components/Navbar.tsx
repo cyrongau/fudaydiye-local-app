@@ -90,7 +90,7 @@ const Navbar: React.FC = () => {
           className="flex-1 max-w-2xl h-[60px] bg-[#F7F9F8] dark:bg-white/5 rounded-full flex items-center px-6 gap-3 group border border-transparent hover:border-primary/30 transition-all cursor-text"
         >
           <span className="material-symbols-outlined text-gray-400 text-[28px]">search</span>
-          <span className="flex-1 text-base font-medium text-gray-400">Search products, brands and vendors (AI enabled)...</span>
+          <span className="flex-1 text-base font-medium text-gray-400 truncate">Search products, brands...</span>
           <button className="bg-primary text-secondary px-8 h-[44px] rounded-full text-[13px] font-black uppercase tracking-[0.1em] hover:bg-primary-dark transition-all">
             Find
           </button>

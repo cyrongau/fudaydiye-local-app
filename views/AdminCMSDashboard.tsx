@@ -8,7 +8,7 @@ import AdminLiveManager from './AdminLiveManager';
 
 const AdminCMSDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'PAGE' | 'BLOG' | 'FAQ' | 'HOME_SLIDER' | 'SHOP_SLIDER' | 'MOBILE_AD' | 'LIVE_OPS'>('PAGE');
+  const [activeTab, setActiveTab] = useState<'PAGE' | 'BLOG' | 'FAQ' | 'HOME_SLIDER' | 'SHOP_SLIDER' | 'MOBILE_AD' | 'PROMO_CARD' | 'LIVE_OPS'>('PAGE');
   const [items, setItems] = useState<CMSContent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -63,7 +63,7 @@ const AdminCMSDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-12">
           <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-2xl border border-gray-200 dark:border-white/10 w-fit mb-8 overflow-x-auto no-scrollbar max-w-full">
-            {(['PAGE', 'BLOG', 'FAQ', 'HOME_SLIDER', 'SHOP_SLIDER', 'MOBILE_AD', 'LIVE_OPS'] as const).map(tab => (
+            {(['PAGE', 'BLOG', 'FAQ', 'HOME_SLIDER', 'SHOP_SLIDER', 'MOBILE_AD', 'PROMO_CARD', 'LIVE_OPS'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}

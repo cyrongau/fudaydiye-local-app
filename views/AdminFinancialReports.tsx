@@ -104,7 +104,7 @@ const AdminFinancialReports: React.FC = () => {
           <div className="absolute top-0 right-0 w-48 h-48 bg-primary/20 blur-[80px] rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-primary/30 transition-colors duration-700"></div>
           <div className="relative z-10 flex flex-col gap-1">
             <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Managed Platform GMV</span>
-            <h2 className="text-6xl font-black tracking-tighter leading-none">$142,802<span className="text-primary text-2xl font-bold">.50</span></h2>
+            <h2 className="text-6xl font-black tracking-tighter leading-none">$0<span className="text-primary text-2xl font-bold">.00</span></h2>
             <div className="mt-8 flex items-center gap-3">
               <div className="flex-1 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
                 <p className="text-[8px] font-black uppercase text-primary mb-1">Escrow Queue</p>

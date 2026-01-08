@@ -17,9 +17,10 @@ interface SidebarItem {
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role } = useAuth();
+  const { role, profile } = useAuth(); // Access profile
 
   if (role === 'CUSTOMER' || !role) return null;
+  // ... (items definitions omitted for brevity, they are unchanged)
 
   const getAdminItems = (): SidebarItem[] => [
     { icon: 'grid_view', path: '/admin', label: 'Health Center' },
@@ -60,6 +61,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       className={`hidden md:flex transition-all duration-500 ease-in-out bg-white dark:bg-surface-dark border-r border-gray-100 dark:border-gray-800 h-[calc(100vh-88px)] sticky top-[88px] flex-col items-center justify-between shrink-0 overflow-hidden z-40 ${isCollapsed ? 'w-[88px]' : 'w-[260px]'}`}
     >
       <div className="flex flex-col gap-1.5 w-full px-3 py-6 overflow-y-auto no-scrollbar flex-1">
+
+        {/* User Profile Section */}
+        <div className={`flex flex-col items-center mb-6 transition-all duration-500 ${isCollapsed ? 'gap-2' : 'gap-3'}`}>
+          <div className="size-16 rounded-full border-2 border-gray-100 dark:border-white/10 p-1 flex-shrink-0">
+            <img
+              src={profile?.avatar || `https://ui-avatars.com/api/?name=${profile?.fullName || 'User'}&background=random`}
+              className="w-full h-full rounded-full object-cover"
+              alt="Profile"
+            />
+          </div>
+
+          <div className={`text-center transition-all duration-500 overflow-hidden whitespace-nowrap ${isCollapsed ? 'opacity-0 h-0' : 'opacity-100 h-auto'}`}>
+            <h3 className="text-sm font-black text-secondary dark:text-white uppercase leading-tight truncate px-2">{profile?.fullName || 'User'}</h3>
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{role}</p>
+          </div>
+        </div>
+
         <button
           onClick={onToggle}
           className="mb-4 size-12 rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-primary transition-colors self-center shrink-0"

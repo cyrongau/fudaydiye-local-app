@@ -152,20 +152,35 @@ const AdminCMSEditor: React.FC = () => {
                   placeholder="Hero Title Text..."
                 />
               </div>
-              {isSliderType && (
+              {(isSliderType || effectiveType === 'PROMO_CARD') && (
                 <div className="space-y-2 animate-in slide-in-from-top-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Secondary Subtitle</label>
                   <input
-                    value={formState.subtitle}
-                    onChange={e => setFormState({ ...formState, subtitle: e.target.value })}
-                    className="w-full h-14 bg-gray-50/50 dark:bg-white/2 border-2 border-gray-100 dark:border-white/5 rounded-[20px] px-8 text-sm font-bold text-gray-400"
-                    placeholder="Brief context line..."
+                    type="text"
+                    value={formState.subtitle || ''}
+                    onChange={(e) => setFormState({ ...formState, subtitle: e.target.value })}
+                    className="w-full bg-gray-50 dark:bg-black/20 border-none rounded-xl p-3 text-xs font-bold text-secondary dark:text-white focus:ring-2 focus:ring-primary/50"
+                    placeholder="Secondary subtitle text..."
                   />
+                </div>
+              )}
+
+              {effectiveType === 'PROMO_CARD' && (
+                <div className="space-y-2 animate-in slide-in-from-top-3">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Display Section</label>
+                  <select
+                    value={formState.section || 'HOME_TOP_ROW'}
+                    onChange={(e) => setFormState({ ...formState, section: e.target.value as any })}
+                    className="w-full bg-gray-50 dark:bg-black/20 border-none rounded-xl p-3 text-xs font-bold text-secondary dark:text-white focus:ring-2 focus:ring-primary/50 appearance-none"
+                  >
+                    <option value="HOME_TOP_ROW">Top Row (Mid Page)</option>
+                    <option value="HOME_BOTTOM_ROW">Bottom Row (Footer)</option>
+                  </select>
                 </div>
               )}
             </div>
 
-            {!isSliderType && (
+            {!isSliderType && effectiveType !== 'PROMO_CARD' && (
               <div className="space-y-2">
                 <div className="flex flex-col border-2 border-gray-100 dark:border-white/5 rounded-[32px] overflow-hidden shadow-inner bg-white dark:bg-surface-dark">
                   <div className="bg-gray-50 dark:bg-white/2 p-3 flex flex-wrap gap-1 border-b border-gray-100 dark:border-white/5">
@@ -184,7 +199,7 @@ const AdminCMSEditor: React.FC = () => {
               </div>
             )}
 
-            {isSliderType && (
+            {(isSliderType || effectiveType === 'PROMO_CARD') && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-bottom-4">
                 <div className="space-y-6">
                   <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">CTA Logic</h4>
