@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, onSnapshot, orderBy, doc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../Providers';
 
@@ -29,7 +29,7 @@ const HeaderNotification: React.FC = () => {
         // In a real app, use a real URL or complete base64
     }, []);
 
-    // Notification Listener
+    // Notification Fetch (Stable)
     useEffect(() => {
         if (!user?.uid) return;
 
@@ -38,27 +38,28 @@ const HeaderNotification: React.FC = () => {
             Notification.requestPermission();
         }
 
-        const q = query(collection(db, "notifications"), where("userId", "==", user.uid), orderBy("createdAt", "desc"));
-        const unsub = onSnapshot(q, (snap) => {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
-            setNotifications(list);
+        const fetchNotifications = async () => {
+            try {
+                const q = query(collection(db, "notifications"), where("userId", "==", user.uid), orderBy("createdAt", "desc"));
+                const snap = await getDocs(q);
 
-            const unreadCount = list.filter(n => !n.read).length;
-            if (unreadCount > 0 && !hasUnread) {
-                // Play sound only on new unread state
-                audioRef.current?.play().catch(error => {
-                    // Ignore NotAllowedError (autoplay policy)
-                    console.log("Audio autoplay prevented:", error);
-                });
+                const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+                setNotifications(list);
 
-                // Trigger System Notification
-                if ("Notification" in window && Notification.permission === "granted") {
-                    new Notification("Fudaydiye System Event", { body: "You have new tasks requiring attention." });
+                const unreadCount = list.filter(n => !n.read).length;
+                if (unreadCount > 0 && !hasUnread) {
+                    audioRef.current?.play().catch(e => console.log("Audio prevented:", e));
+                    if ("Notification" in window && Notification.permission === "granted") {
+                        new Notification("Fudaydiye System Event", { body: "You have new tasks requiring attention." });
+                    }
                 }
+                setHasUnread(unreadCount > 0);
+            } catch (error) {
+                console.warn("Notification Fetch Error:", error);
             }
-            setHasUnread(unreadCount > 0);
-        });
-        return () => unsub();
+        };
+
+        fetchNotifications();
     }, [user, hasUnread]);
 
     const handleClearNotifications = async () => {

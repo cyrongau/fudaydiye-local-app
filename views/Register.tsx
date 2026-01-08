@@ -44,7 +44,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCountryCode, setSelectedCountryCode] = useState('+252');
-  
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -64,6 +64,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
     { id: 'VENDOR', label: 'VENDOR', icon: 'store' },
     { id: 'RIDER', label: 'RIDER', icon: 'local_shipping' },
     { id: 'CLIENT', label: 'CLIENT', icon: 'work' },
+    { id: 'FUDAYDIYE_ADMIN', label: 'GLOBAL OPS', icon: 'public' },
   ];
 
   const normalizePhone = (num: string) => {
@@ -103,7 +104,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
         trustTier: 'BRONZE',
         createdAt: serverTimestamp(),
         avatar: `https://ui-avatars.com/api/?name=${formData.fullName}&background=015754&color=06DC7F`,
-        ...(selectedRole === 'VENDOR' && { businessName: formData.businessIdentity, businessCategory: formData.category, lat: 9.5624, lng: 44.0770 }),
+        ...((selectedRole === 'VENDOR' || selectedRole === 'FUDAYDIYE_ADMIN') && { businessName: formData.businessIdentity, businessCategory: formData.category, lat: 9.5624, lng: 44.0770 }),
         ...(selectedRole === 'RIDER' && { vehicleType: formData.vehicleType, plateNumber: formData.plateNumber }),
         ...(selectedRole === 'CLIENT' && { enterpriseName: formData.enterpriseName, operationalHub: formData.operationalHub })
       };
@@ -111,13 +112,14 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
       await setDoc(doc(db, "users", user.uid), profileData);
       setAppRole(selectedRole);
       onRegister();
-      
+
       const routes: Record<UserRole, string> = {
         CUSTOMER: '/customer',
         VENDOR: '/vendor',
         RIDER: '/rider',
         CLIENT: '/client',
-        ADMIN: '/admin'
+        ADMIN: '/admin',
+        FUDAYDIYE_ADMIN: '/vendor'
       };
       navigate(routes[selectedRole]);
     } catch (err: any) {
@@ -130,7 +132,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
 
   const renderRoleSelection = () => (
     <div className="flex flex-col flex-1 animate-in fade-in zoom-in-95 duration-500">
-      <div className="bg-white dark:bg-black/30 backdrop-blur-xl rounded-[40px] p-10 w-full border border-secondary/10 dark:border-primary/10 shadow-2xl mt-10">
+      <div className="bg-white dark:bg-black/30 backdrop-blur-xl rounded-[40px] p-10 w-full border border-secondary/10 dark:border-primary/10 shadow-2xl mt-4 mb-24">
         <div className="flex flex-col items-center mb-10">
           <div className="size-20 rounded-[28px] bg-primary/20 border border-primary/30 flex items-center justify-center mb-6">
             <span className="material-symbols-outlined text-primary text-[40px] icon-filled">account_circle</span>
@@ -144,11 +146,10 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
             <button
               key={role.id}
               onClick={() => setSelectedRole(role.id)}
-              className={`relative h-36 rounded-[32px] flex flex-col items-center justify-center gap-4 transition-all duration-500 border-2 ${
-                selectedRole === role.id 
-                ? 'border-primary bg-primary/10 dark:bg-primary/10 shadow-primary-glow scale-[1.05]' 
+              className={`relative h-36 rounded-[32px] flex flex-col items-center justify-center gap-4 transition-all duration-500 border-2 ${selectedRole === role.id
+                ? 'border-primary bg-primary/10 dark:bg-primary/10 shadow-primary-glow scale-[1.05]'
                 : 'border-secondary/5 dark:border-white/5 bg-gray-50 dark:bg-white/2 hover:border-primary/20'
-              }`}
+                }`}
             >
               <span className={`material-symbols-outlined text-[42px] ${selectedRole === role.id ? 'text-primary' : 'text-secondary/40 dark:text-white/40'}`}>
                 {role.icon}
@@ -178,7 +179,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
   const renderForm = () => {
     return (
       <div className="flex flex-col flex-1 animate-in slide-in-from-right duration-500">
-        <div className="bg-white dark:bg-black/30 backdrop-blur-xl rounded-[40px] p-10 w-full border border-secondary/10 dark:border-primary/10 shadow-2xl mt-6">
+        <div className="bg-white dark:bg-black/30 backdrop-blur-xl rounded-[40px] p-10 w-full border border-secondary/10 dark:border-primary/10 shadow-2xl mt-4 mb-24">
           <div className="flex flex-col items-center mb-10 text-center">
             <h2 className="text-3xl font-black text-secondary dark:text-white mb-2 tracking-tighter uppercase">{selectedRole} Setup</h2>
             <p className="text-[10px] font-black text-secondary/60 dark:text-white/60 uppercase tracking-[0.3em]">Configure Node Credentials</p>
@@ -188,7 +189,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-secondary/50 dark:text-white/50 uppercase tracking-widest ml-1">Legal Recipient Name</label>
-              <input required placeholder="Enter full name..." className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-secondary dark:text-white text-base font-bold px-6 shadow-inner" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} />
+              <input required placeholder="Enter full name..." className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-secondary dark:text-white text-base font-bold px-6 shadow-inner" value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} />
             </div>
 
             <div className="space-y-1.5">
@@ -200,28 +201,41 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
                     {COMMON_COUNTRY_CODES.map(c => <option key={c.code} value={c.code} className="bg-white dark:bg-dark-base text-secondary dark:text-white">{c.code} ({c.label})</option>)}
                   </select>
                 </div>
-                <input required type="tel" placeholder="63 444 1122" className="bg-transparent border-none focus:ring-0 text-secondary dark:text-white text-base font-bold px-6 flex-1" value={formData.mobile} onChange={(e) => setFormData({...formData, mobile: e.target.value})} />
+                <input required type="tel" placeholder="63 444 1122" className="bg-transparent border-none focus:ring-0 text-secondary dark:text-white text-base font-bold px-6 flex-1" value={formData.mobile} onChange={(e) => setFormData({ ...formData, mobile: e.target.value })} />
               </div>
             </div>
+
+            {(selectedRole === 'VENDOR' || selectedRole === 'FUDAYDIYE_ADMIN') && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-top-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-secondary/50 dark:text-white/50 uppercase tracking-widest ml-1">Enterprise Name</label>
+                  <input required placeholder="e.g. Som-Logistics Ltd" className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-base font-bold px-6" value={formData.businessIdentity} onChange={(e) => setFormData({ ...formData, businessIdentity: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-secondary/50 dark:text-white/50 uppercase tracking-widest ml-1">One-Word Industry</label>
+                  <input required placeholder="e.g. Retail" className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-base font-bold px-6" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} />
+                </div>
+              </div>
+            )}
 
             {selectedRole === 'RIDER' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-top-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-secondary/50 dark:text-white/50 uppercase tracking-widest ml-1">Vehicle Node</label>
-                  <select className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-[11px] font-black uppercase appearance-none px-6" value={formData.vehicleType} onChange={(e) => setFormData({...formData, vehicleType: e.target.value})}>
+                  <select className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-[11px] font-black uppercase appearance-none px-6" value={formData.vehicleType} onChange={(e) => setFormData({ ...formData, vehicleType: e.target.value })}>
                     {VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-secondary/50 dark:text-white/50 uppercase tracking-widest ml-1">Verified Plate ID</label>
-                  <input required placeholder="e.g. SL-2911" className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-base font-bold px-6" value={formData.plateNumber} onChange={(e) => setFormData({...formData, plateNumber: e.target.value})} />
+                  <input required placeholder="e.g. SL-2911" className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-base font-bold px-6" value={formData.plateNumber} onChange={(e) => setFormData({ ...formData, plateNumber: e.target.value })} />
                 </div>
               </div>
             )}
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-secondary/50 dark:text-white/50 uppercase tracking-widest ml-1">Access Pass (Password)</label>
-              <input required type="password" placeholder="••••••••" className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-base font-bold px-6 shadow-inner" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
+              <input required type="password" placeholder="••••••••" className="w-full h-16 rounded-[24px] bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 focus:border-primary text-base font-bold px-6 shadow-inner" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
             </div>
 
             <div className="flex gap-4 pt-10">
@@ -244,7 +258,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
         <span className="text-[11px] font-black text-secondary dark:text-white uppercase tracking-[0.4em]">Fudaydiye Protocol</span>
         <div className="size-11"></div>
       </div>
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-10 px-6 max-w-4xl mx-auto w-full">
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-32 px-6 max-w-4xl mx-auto w-full">
         {step === 'SELECT_ROLE' ? renderRoleSelection() : renderForm()}
       </div>
     </div>

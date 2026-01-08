@@ -29,9 +29,20 @@ const VendorOrderFulfillment: React.FC = () => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      const fetched = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          total: Number(data.total) || Number(data.totalAmount) || 0,
+          createdAt: data.createdAt || { seconds: 0 } // Safe fallback
+        } as Order;
+      });
       fetched.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setOrders(fetched);
+      setLoading(false);
+    }, (err) => {
+      console.error("Orders Verification Failed:", err);
       setLoading(false);
     });
 

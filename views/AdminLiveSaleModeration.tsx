@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, onSnapshot, doc, updateDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, serverTimestamp, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 import StatusModal from '../components/StatusModal';
@@ -22,22 +22,28 @@ const AdminLiveSaleModeration: React.FC = () => {
   };
 
   useEffect(() => {
-    let unsub = () => { };
-    try {
-      const q = query(collection(db, "live_sessions"), orderBy("createdAt", "desc"));
-      unsub = onSnapshot(q, (snap) => {
-        setStreams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        setLoading(false);
-      }, (error) => {
+    let active = true;
+
+    const fetchStreams = async () => {
+      try {
+        const q = query(collection(db, "live_sessions"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+
+        if (active) {
+          setStreams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          setLoading(false);
+        }
+      } catch (error: any) {
         console.error("Live Streams Fetch Error:", error);
-        showModal('Connection Error', `Stream Node Error: ${error.message}`, 'ERROR');
-        setLoading(false);
-      });
-    } catch (e) {
-      console.error("Live Stream setup error", e);
-      setLoading(false);
-    }
-    return () => unsub();
+        if (active) {
+          showModal('Connection Error', `Stream Node Error: ${error.message}`, 'ERROR');
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchStreams();
+    return () => { active = false; };
   }, []);
 
   const handleTerminate = async (id: string, vendor: string) => {

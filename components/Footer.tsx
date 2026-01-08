@@ -25,6 +25,9 @@ const Footer: React.FC = () => {
       if (doc.exists() && doc.data().business) {
         setBusiness(prev => ({ ...prev, ...doc.data().business }));
       }
+    }, (error) => {
+      console.warn("Footer Config Verification Failed:", error);
+      // Fail silently to default business info
     });
     return () => unsub();
   }, []);

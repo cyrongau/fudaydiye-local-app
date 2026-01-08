@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../Providers';
@@ -14,48 +13,72 @@ interface SidebarItem {
   label: string;
 }
 
+const ADMIN_ITEMS: SidebarItem[] = [
+  { icon: 'grid_view', path: '/admin', label: 'Health Center' },
+  { icon: 'hub', path: '/admin/config', label: 'Integrations' },
+  { icon: 'category', path: '/admin/categories', label: 'Taxonomy' },
+  { icon: 'bar_chart', path: '/admin/reports', label: 'Treasury' },
+  { icon: 'local_shipping', path: '/admin/logistics', label: 'Fleet Control' },
+  { icon: 'videocam', path: '/admin/live-moderation', label: 'Live Terminal' },
+  { icon: 'group', path: '/admin/users', label: 'Merchants' },
+  { icon: 'two_wheeler', path: '/admin/riders', label: 'Riders' },
+  { icon: 'article', path: '/admin/cms', label: 'CMS Terminal' },
+  { icon: 'shopping_cart_off', path: '/admin/abandonment', label: 'Lost Leads' },
+];
+
+const VENDOR_ITEMS: SidebarItem[] = [
+  { icon: 'grid_view', path: '/vendor', label: 'Command Center' },
+  { icon: 'receipt_long', path: '/vendor/orders', label: 'Fulfillment' },
+  { icon: 'inventory_2', path: '/vendor/management', label: 'Catalog' },
+  { icon: 'inventory', path: '/vendor/inventory', label: 'Stock Logic' },
+  { icon: 'bar_chart', path: '/vendor/analytics', label: 'Growth Engine' },
+  { icon: 'account_balance_wallet', path: '/vendor/earnings', label: 'Earning Ledger' },
+  { icon: 'hub', path: '/vendor/stores', label: 'Branches' },
+  { icon: 'group', path: '/vendor/staff', label: 'Personnel' },
+];
+
+const RIDER_ITEMS: SidebarItem[] = [
+  { icon: 'grid_view', path: '/rider', label: 'Fleet Queue' },
+  { icon: 'assignment', path: '/rider/assignments', label: 'Assignments' },
+  { icon: 'sensors', path: '/rider/status', label: 'Status & Duty' },
+  { icon: 'account_balance_wallet', path: '/rider/wallet', label: 'Earnings & Wallet' },
+];
+
+const CLIENT_ITEMS: SidebarItem[] = [
+  { icon: 'local_shipping', path: '/client', label: 'Logistics' },
+  { icon: 'bar_chart', path: '/client/analytics', label: 'Analytics' },
+  { icon: 'receipt_long', path: '/client/invoices', label: 'Invoices' },
+  { icon: 'contact_support', path: '/client/support', label: 'Support' },
+];
+
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { role, profile } = useAuth(); // Access profile
 
-  if (role === 'CUSTOMER' || !role) return null;
-  // ... (items definitions omitted for brevity, they are unchanged)
+  // Early return moved to bottom to prevent Hook Violation
+  // if (role === 'CUSTOMER' || !role) return null;
 
-  const getAdminItems = (): SidebarItem[] => [
-    { icon: 'grid_view', path: '/admin', label: 'Health Center' },
-    { icon: 'hub', path: '/admin/config', label: 'Integrations' },
-    { icon: 'category', path: '/admin/categories', label: 'Taxonomy' },
-    { icon: 'bar_chart', path: '/admin/reports', label: 'Treasury' },
-    { icon: 'local_shipping', path: '/admin/logistics', label: 'Fleet Control' },
-    { icon: 'videocam', path: '/admin/live-moderation', label: 'Live Terminal' },
-    { icon: 'group', path: '/admin/users', label: 'Merchants' },
-    { icon: 'two_wheeler', path: '/admin/riders', label: 'Riders' },
-    { icon: 'article', path: '/admin/cms', label: 'CMS Terminal' },
-    { icon: 'shopping_cart_off', path: '/admin/abandonment', label: 'Lost Leads' },
-    { icon: 'security', path: '/admin/audits', label: 'Security Log' },
-  ];
+  // Move definitions outside or use stable constants
+  const items = React.useMemo(() => {
+    if (role === 'ADMIN') return [...ADMIN_ITEMS, { icon: 'security', path: '/admin/audits', label: 'Security Log' }];
+    if (role === 'VENDOR') return VENDOR_ITEMS;
+    if (role === 'RIDER') return RIDER_ITEMS;
+    if (role === 'CLIENT') return CLIENT_ITEMS;
 
-  const getVendorItems = (): SidebarItem[] => [
-    { icon: 'grid_view', path: '/vendor', label: 'Command Center' },
-    { icon: 'receipt_long', path: '/vendor/orders', label: 'Fulfillment' },
-    { icon: 'inventory_2', path: '/vendor/management', label: 'Catalog' },
-    { icon: 'inventory', path: '/vendor/inventory', label: 'Stock Logic' },
-    { icon: 'bar_chart', path: '/vendor/analytics', label: 'Growth Engine' },
-    { icon: 'account_balance_wallet', path: '/vendor/earnings', label: 'Earning Ledger' },
-    { icon: 'hub', path: '/vendor/stores', label: 'Branches' },
-    { icon: 'group', path: '/vendor/staff', label: 'Personnel' },
-  ];
+    if (role === 'FUDAYDIYE_ADMIN') {
+      return [
+        ...VENDOR_ITEMS,
+        { icon: 'horizontal_rule', path: '#', label: 'Global Ops' },
+        ...ADMIN_ITEMS
+      ];
+    }
+    return [];
+  }, [role]);
 
-  const getRiderItems = (): SidebarItem[] => [
-    { icon: 'grid_view', path: '/rider', label: 'Fleet Queue' },
-    { icon: 'assignment', path: '/rider/assignments', label: 'Assignments' },
-    { icon: 'sensors', path: '/rider/status', label: 'Status & Duty' },
-    { icon: 'account_balance_wallet', path: '/rider/wallet', label: 'Earnings & Wallet' },
-  ];
-
-  const items = role === 'ADMIN' ? getAdminItems() : role === 'VENDOR' ? getVendorItems() : getRiderItems();
   const settingsLabel = role === 'RIDER' ? 'Verification Hub' : 'System Config';
+
+  if (role === 'CUSTOMER' || !role) return null;
 
   return (
     <aside
@@ -88,11 +111,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
           </span>
         </button>
 
-        {items.map((item) => {
+        {items.map((item, idx) => {
+          if (item.path === '#') {
+            return (
+              <div key={`${item.label}-${idx}`} className={`my-2 px-4 transition-all duration-500 ${isCollapsed ? 'opacity-0' : 'opacity-100'}`}>
+                <p className="text-[9px] font-black text-primary uppercase tracking-widest">{item.label}</p>
+              </div>
+            );
+          }
+
           const isActive = location.pathname === item.path;
           return (
             <button
-              key={item.label}
+              key={`${item.label}-${idx}`}
               onClick={() => navigate(item.path)}
               className={`h-12 rounded-xl flex items-center transition-all group relative px-3 w-full shrink-0 ${isActive
                 ? 'bg-secondary text-primary shadow-md'
@@ -119,7 +150,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
 
       <div className="flex flex-col gap-1.5 w-full px-3 border-t border-gray-50 dark:border-white/5 py-6 shrink-0">
         <button
-          onClick={() => navigate(`/${role?.toLowerCase()}/settings`)}
+          onClick={() => {
+            const basePath = role === 'FUDAYDIYE_ADMIN' ? '/vendor' : `/${role?.toLowerCase()}`;
+            navigate(`${basePath}/settings`);
+          }}
           className={`h-12 rounded-xl flex items-center px-3 w-full text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-all group relative overflow-hidden ${location.pathname.includes('settings') ? 'bg-gray-100 dark:bg-white/10' : ''}`}
         >
           <span className="material-symbols-outlined text-[24px] shrink-0">verified_user</span>

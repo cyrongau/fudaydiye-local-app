@@ -11,7 +11,7 @@ import AgoraRTC from 'agora-rtc-sdk-ng';
 
 const VendorLiveSaleSetup: React.FC = () => {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Fashion');
@@ -28,6 +28,7 @@ const VendorLiveSaleSetup: React.FC = () => {
 
   const [inventory, setInventory] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Agora State
@@ -186,14 +187,35 @@ const VendorLiveSaleSetup: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Featured Inventory</label>
-              <div className="grid grid-cols-2 gap-3 max-h-[250px] overflow-y-auto no-scrollbar">
-                {inventory.map(p => (
-                  <button key={p.id} onClick={() => setSelectedProducts(prev => prev.find(s => s.id === p.id) ? prev.filter(s => s.id !== p.id) : [...prev, p])} className={`p-4 rounded-[28px] border-2 flex items-center gap-3 text-left transition-all ${selectedProducts.find(s => s.id === p.id) ? 'bg-primary/5 border-primary shadow-md' : 'bg-white dark:bg-surface-dark border-gray-50 dark:border-white/5'}`}>
-                    <img src={p.images?.[0] || 'https://placehold.co/100'} className="size-10 rounded-xl overflow-hidden shrink-0 border border-gray-100 object-cover" alt="" />
-                    <span className="text-[10px] font-black uppercase truncate text-secondary dark:text-white">{p.name}</span>
-                  </button>
-                ))}
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Featured Inventory</label>
+                <div className="relative w-40">
+                  <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-[14px]">search</span>
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full h-8 pl-7 pr-3 bg-gray-100 dark:bg-white/5 border-none rounded-lg text-[10px] font-bold text-secondary dark:text-white focus:ring-1 focus:ring-primary placeholder:text-gray-400 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 max-h-[250px] overflow-y-auto no-scrollbar content-start">
+                {inventory
+                  .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map(p => (
+                    <button key={p.id} onClick={() => setSelectedProducts(prev => prev.find(s => s.id === p.id) ? prev.filter(s => s.id !== p.id) : [...prev, p])} className={`p-4 rounded-[28px] border-2 flex items-center gap-3 text-left transition-all ${selectedProducts.find(s => s.id === p.id) ? 'bg-primary/5 border-primary shadow-md' : 'bg-white dark:bg-surface-dark border-gray-50 dark:border-white/5'}`}>
+                      <img src={p.images?.[0] || 'https://placehold.co/100'} className="size-10 rounded-xl overflow-hidden shrink-0 border border-gray-100 object-cover" alt="" />
+                      <span className="text-[10px] font-black uppercase truncate text-secondary dark:text-white">{p.name}</span>
+                    </button>
+                  ))}
+                {inventory.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                  <div className="col-span-2 py-8 text-center opacity-40">
+                    <span className="material-symbols-outlined text-2xl mb-1">search_off</span>
+                    <p className="text-[9px] font-black uppercase">No items found</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

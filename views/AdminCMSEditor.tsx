@@ -56,6 +56,7 @@ const AdminCMSEditor: React.FC = () => {
         if (snap.exists()) {
           const data = snap.data() as CMSContent;
           setFormState(data);
+          setTagInput(data.tags?.join(', ') || '');
           setIsSlugLocked(true);
           if (editorRef.current) {
             editorRef.current.innerHTML = data.content || '';
@@ -77,24 +78,48 @@ const AdminCMSEditor: React.FC = () => {
     setFormState(prev => ({ ...prev, title: val, slug }));
   };
 
+  // Toast State
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   const handleSave = async () => {
     setIsSaving(true);
     const content = editorRef.current?.innerHTML || '';
     const docId = id || Math.random().toString(36).substring(7);
 
-    const data = {
-      ...formState,
-      content,
+    // Sanitize payload
+    const payload = {
+      type: effectiveType,
+      title: formState.title || '',
+      subtitle: formState.subtitle || '',
+      slug: formState.slug || '',
+      status: formState.status || 'DRAFT',
+      category: formState.category || 'General',
+      tags: tagInput.split(',').map(t => t.trim()).filter(t => t),
+      featuredImage: formState.featuredImage || '',
+      content: content,
+      ctaText: formState.ctaText || 'Explore Now',
+      ctaLink: formState.ctaLink || '/customer/explore',
+      linkedProductId: formState.linkedProductId || '',
+      linkedVendorId: formState.linkedVendorId || '',
+      section: formState.section || 'HOME_TOP_ROW',
       updatedAt: serverTimestamp(),
       createdAt: formState.createdAt || serverTimestamp(),
     };
 
     try {
-      await setDoc(doc(db, "cms_content", docId), data);
-      navigate('/admin/cms');
-    } catch (err) {
+      await setDoc(doc(db, "cms_content", docId), payload);
+      setToast({ message: 'Content synced to ecosystem successfully.', type: 'success' });
+      setTimeout(() => navigate('/admin/cms'), 1000);
+    } catch (err: any) {
       console.error(err);
-      alert('Sync failure.');
+      setToast({ message: `Sync failure: ${err.message}`, type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -117,10 +142,18 @@ const AdminCMSEditor: React.FC = () => {
   if (loading) return <div className="h-screen flex items-center justify-center bg-background-light dark:bg-background-dark"><div className="size-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark font-display">
+    <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark font-display relative">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[110] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${toast.type === 'success' ? 'bg-[#06DC7F] text-[#015754]' : 'bg-red-500 text-white'}`}>
+          <span className="material-symbols-outlined text-[20px] font-black">{toast.type === 'success' ? 'check_circle' : 'error'}</span>
+          <span className="text-[11px] font-black uppercase tracking-widest">{toast.message}</span>
+        </div>
+      )}
+
       <header className="sticky top-0 z-[100] bg-white dark:bg-surface-dark border-b border-gray-100 dark:border-gray-800 px-10 py-6 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-6">
-          <button onClick={() => navigate('/admin/cms')} className="size-11 rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 active:scale-90 transition-all border border-gray-100 dark:border-white/5">
+          <button onClick={() => navigate('/admin/cms')} className="size-11 rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 active:scale-90 transition-all border border-gray-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 hover:shadow-sm">
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
           <div>
@@ -132,7 +165,7 @@ const AdminCMSEditor: React.FC = () => {
           <button
             disabled={isSaving}
             onClick={handleSave}
-            className="h-16 px-10 bg-primary text-secondary rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50"
+            className="h-16 px-10 bg-primary text-secondary rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg hover:shadow-primary-glow active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? <span className="animate-spin material-symbols-outlined">sync</span> : <><span className="material-symbols-outlined">publish</span> Publish to Cloud</>}
           </button>
@@ -148,8 +181,17 @@ const AdminCMSEditor: React.FC = () => {
                 <input
                   value={formState.title}
                   onChange={e => handleTitleChange(e.target.value)}
-                  className="w-full h-16 bg-gray-50/50 dark:bg-white/2 border-2 border-gray-100 dark:border-white/5 rounded-[24px] px-8 text-2xl font-black text-secondary dark:text-white focus:border-primary transition-all"
+                  className="w-full h-16 bg-gray-50 dark:bg-black/20 border-2 border-transparent focus:border-primary/50 dark:focus:border-primary/50 rounded-[24px] px-8 text-2xl font-black text-secondary dark:text-white placeholder-gray-300 transition-all outline-none"
                   placeholder="Hero Title Text..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Badge Text / Category</label>
+                <input
+                  value={formState.category || ''}
+                  onChange={e => setFormState({ ...formState, category: e.target.value })}
+                  className="w-full h-12 bg-gray-50 dark:bg-black/20 border-2 border-transparent focus:border-primary/50 dark:focus:border-primary/50 rounded-xl px-4 text-xs font-bold text-secondary dark:text-white placeholder-gray-400 transition-all outline-none"
+                  placeholder="e.g. GENERAL, NEW ARRIVAL, FEATURED"
                 />
               </div>
               {(isSliderType || effectiveType === 'PROMO_CARD') && (
@@ -159,7 +201,7 @@ const AdminCMSEditor: React.FC = () => {
                     type="text"
                     value={formState.subtitle || ''}
                     onChange={(e) => setFormState({ ...formState, subtitle: e.target.value })}
-                    className="w-full bg-gray-50 dark:bg-black/20 border-none rounded-xl p-3 text-xs font-bold text-secondary dark:text-white focus:ring-2 focus:ring-primary/50"
+                    className="w-full h-12 bg-gray-50 dark:bg-black/20 border-2 border-transparent focus:border-primary/50 dark:focus:border-primary/50 rounded-xl px-4 text-xs font-bold text-secondary dark:text-white placeholder-gray-400 transition-all outline-none"
                     placeholder="Secondary subtitle text..."
                   />
                 </div>
@@ -171,7 +213,7 @@ const AdminCMSEditor: React.FC = () => {
                   <select
                     value={formState.section || 'HOME_TOP_ROW'}
                     onChange={(e) => setFormState({ ...formState, section: e.target.value as any })}
-                    className="w-full bg-gray-50 dark:bg-black/20 border-none rounded-xl p-3 text-xs font-bold text-secondary dark:text-white focus:ring-2 focus:ring-primary/50 appearance-none"
+                    className="w-full h-12 bg-gray-50 dark:bg-black/20 border-2 border-transparent focus:border-primary/50 dark:focus:border-primary/50 rounded-xl px-4 text-xs font-bold text-secondary dark:text-white focus:outline-none appearance-none cursor-pointer"
                   >
                     <option value="HOME_TOP_ROW">Top Row (Mid Page)</option>
                     <option value="HOME_BOTTOM_ROW">Bottom Row (Footer)</option>
@@ -238,7 +280,7 @@ const AdminCMSEditor: React.FC = () => {
                       ) : (
                         <button
                           onClick={() => setShowProductPicker(true)}
-                          className="w-full h-12 bg-gray-50 dark:bg-white/2 border border-dashed border-gray-300 dark:border-white/20 rounded-xl flex items-center justify-center gap-2 text-gray-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all group"
+                          className="w-full h-12 bg-gray-50 dark:bg-black/20 border border-dashed border-gray-300 dark:border-white/20 rounded-xl flex items-center justify-center gap-2 text-gray-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all group"
                         >
                           <span className="material-symbols-outlined group-hover:scale-110 transition-transform">add_circle</span>
                           <span className="text-[10px] font-black uppercase tracking-widest">Select Product</span>
@@ -258,7 +300,7 @@ const AdminCMSEditor: React.FC = () => {
             <h3 className="text-[10px] font-black text-secondary dark:text-white uppercase tracking-[0.4em] border-b border-gray-50 dark:border-white/5 pb-4">Background Node</h3>
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="relative aspect-video rounded-[32px] overflow-hidden bg-gray-50 dark:bg-white/2 border-2 border-dashed border-gray-200 dark:border-white/10 flex flex-col items-center justify-center cursor-pointer group hover:border-primary transition-all shadow-inner"
+              className="relative aspect-video rounded-[32px] overflow-hidden bg-gray-50 dark:bg-black/20 border-2 border-dashed border-gray-200 dark:border-white/10 flex flex-col items-center justify-center cursor-pointer group hover:border-primary transition-all shadow-inner"
             >
               {formState.featuredImage ? (
                 <img src={formState.featuredImage} className="w-full h-full object-cover" alt="Hero Asset" />
@@ -273,7 +315,7 @@ const AdminCMSEditor: React.FC = () => {
 
             <div className="space-y-4 pt-4">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Lifecycle Status</label>
-              <select value={formState.status} onChange={e => setFormState({ ...formState, status: e.target.value as any })} className="w-full h-14 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl px-5 text-xs font-black uppercase tracking-widest appearance-none cursor-pointer">
+              <select value={formState.status} onChange={e => setFormState({ ...formState, status: e.target.value as any })} className="w-full h-14 bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-white/10 rounded-2xl px-5 text-xs font-black uppercase tracking-widest appearance-none cursor-pointer text-secondary dark:text-white focus:outline-none focus:border-primary/50">
                 <option value="DRAFT">⚪ Offline Draft</option>
                 <option value="PUBLISHED">🟢 Active on Cloud</option>
               </select>
@@ -282,9 +324,9 @@ const AdminCMSEditor: React.FC = () => {
             <div className="space-y-4 pt-4">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Meta Tags (Comma Separated)</label>
               <input
-                value={formState.tags?.join(', ') || ''}
-                onChange={e => setFormState({ ...formState, tags: e.target.value.split(',').map(t => t.trim()).filter(t => t) })}
-                className="w-full h-14 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl px-5 text-xs font-bold text-secondary dark:text-white"
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                className="w-full h-14 bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-white/10 rounded-2xl px-5 text-xs font-bold text-secondary dark:text-white focus:border-primary/50 focus:outline-none placeholder-gray-400"
                 placeholder="e.g. Summer, Featured, orange-theme"
               />
             </div>
@@ -314,7 +356,7 @@ const InputField = ({ label, value, onChange }: { label: string, value: string, 
     <input
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full h-12 bg-gray-50 dark:bg-white/2 border border-gray-100 dark:border-white/5 rounded-xl px-4 text-xs font-bold text-secondary dark:text-white"
+      className="w-full h-12 bg-gray-50 dark:bg-black/20 border border-transparent focus:border-primary/50 dark:focus:border-primary/50 rounded-xl px-4 text-xs font-bold text-secondary dark:text-white placeholder-gray-400 transition-all outline-none"
     />
   </div>
 );

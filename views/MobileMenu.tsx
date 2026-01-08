@@ -80,7 +80,12 @@ const MobileMenu: React.FC = () => {
     if (role === 'ADMIN') items = getAdminItems();
     else if (role === 'VENDOR') items = getVendorItems();
     else if (role === 'RIDER') items = getRiderItems();
-    else items = getCustomerItems();
+    else {
+        items = getCustomerItems();
+        if (role === 'CLIENT') {
+            items.push({ icon: 'local_shipping', path: '/client', label: 'Logistics Terminal', color: 'bg-blue-100 text-blue-600' });
+        }
+    }
 
     // Settings is common
     const settingsLabel = role === 'RIDER' ? 'Verification Hub' : 'System Config';

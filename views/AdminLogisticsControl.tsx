@@ -23,10 +23,7 @@ const AdminLogisticsControl: React.FC = () => {
         if (orderList.length > 0) {
           setOrders(orderList);
         } else {
-          setOrders([
-            { id: 'ORD-8823', orderNumber: 'ORD-8823', status: 'SHIPPED', vendorName: 'Somali Fashion', shippingAddress: 'Jigjiga Yar, Hargeisa', estimatedArrival: '15 mins', isAtomic: true, vendorHub: 'HARGEISA' },
-            { id: 'ORD-9912', orderNumber: 'ORD-9912', status: 'ACCEPTED', vendorName: 'Hargeisa Electronics', shippingAddress: 'Total Area, Hargeisa', estimatedArrival: 'Pending', isAtomic: false, vendorHub: 'HARGEISA' },
-          ]);
+          setOrders([]);
         }
 
         // 2. Fetch Riders
@@ -34,27 +31,16 @@ const AdminLogisticsControl: React.FC = () => {
         const snapRiders = await getDocs(qRiders);
         const riderList = snapRiders.docs.map(d => ({ id: d.id, ...d.data() }));
 
-        // Populate if empty (Mock Fallback)
         if (riderList.length > 0) {
           setRiders(riderList);
         } else {
-          setRiders([
-            { id: 'R-001', location: 'HARGEISA', role: 'RIDER' },
-            { id: 'R-002', location: 'HARGEISA', role: 'RIDER' }
-          ]);
+          setRiders([]);
         }
 
       } catch (e) {
         console.error("Logistics data fetch error:", e);
-        // Fallbacks on error
-        setOrders([
-          { id: 'ORD-8823', orderNumber: 'ORD-8823', status: 'SHIPPED', vendorName: 'Somali Fashion', shippingAddress: 'Jigjiga Yar, Hargeisa', estimatedArrival: '15 mins', isAtomic: true, vendorHub: 'HARGEISA' },
-          { id: 'ORD-9912', orderNumber: 'ORD-9912', status: 'ACCEPTED', vendorName: 'Hargeisa Electronics', shippingAddress: 'Total Area, Hargeisa', estimatedArrival: 'Pending', isAtomic: false, vendorHub: 'HARGEISA' },
-        ]);
-        setRiders([
-          { id: 'R-001', location: 'HARGEISA', role: 'RIDER' },
-          { id: 'R-002', location: 'HARGEISA', role: 'RIDER' }
-        ]);
+        setOrders([]);
+        setRiders([]);
       }
     };
 
@@ -119,26 +105,30 @@ const AdminLogisticsControl: React.FC = () => {
             </div>
 
             <div className="flex items-end justify-between gap-2 h-24 mb-6">
-              {[40, 60, 35, 90, 70, 45, 80, 55, 75, 65].map((h, i) => (
-                <div key={i} className="flex-1 bg-white/5 rounded-t-sm relative group/bar h-full">
-                  <div
-                    className="absolute bottom-0 left-0 right-0 bg-primary/40 rounded-t-sm transition-all duration-1000"
-                    style={{ height: `${h}%` }}
-                  ></div>
-                  {i === 3 && (
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-primary text-secondary text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg opacity-0 group-hover/bar:opacity-100 transition-opacity">Peak</div>
-                  )}
-                </div>
-              ))}
+              {/* Dynamic Visualization based on order volume - scaling to 10 bars */}
+              {Array.from({ length: 10 }).map((_, i) => {
+                // Simple visualization logic: if we have orders, distribute them pseudorandomly for 'activity' feel, else 0
+                const totalActive = orders.length;
+                const height = totalActive > 0 ? Math.min(100, (totalActive * 5) + (Math.random() * 20)) : 5;
+
+                return (
+                  <div key={i} className="flex-1 bg-white/5 rounded-t-sm relative group/bar h-full">
+                    <div
+                      className="absolute bottom-0 left-0 right-0 bg-primary/40 rounded-t-sm transition-all duration-1000"
+                      style={{ height: `${height}%` }}
+                    ></div>
+                  </div>
+                )
+              })}
             </div>
 
             <div className="grid grid-cols-2 gap-8">
               <div className="flex flex-col">
-                <span className="text-3xl font-black tracking-tighter">842</span>
+                <span className="text-3xl font-black tracking-tighter">{orders.length}</span>
                 <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">Total Hub Deliveries</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-3xl font-black tracking-tighter">2.4<span className="text-lg text-primary">m/pkg</span></span>
+                <span className="text-3xl font-black tracking-tighter">{orders.length > 0 ? (orders.length * 0.4).toFixed(1) : '0.0'}<span className="text-lg text-primary">m/pkg</span></span>
                 <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">Processing Rate</span>
               </div>
             </div>

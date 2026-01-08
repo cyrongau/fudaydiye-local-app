@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { initializeFirestore, memoryLocalCache } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
@@ -20,23 +20,13 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize services
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Use memory cache to avoid "Internal Assertion Failed" loops from corrupted IndexedDB
+export const db = initializeFirestore(app, {
+  localCache: memoryLocalCache()
+});
+
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
-
-// Enable offline persistence with additional environment checks
-// Enable offline persistence with additional environment checks
-// Note: Disabled temporarily due to 'INTERNAL ASSERTION FAILED: Unexpected state' in mobile webview
-/*
-if (typeof window !== 'undefined' && window.indexedDB) {
-  enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('Persistence failed: Multiple tabs open.');
-    } else if (err.code === 'unimplemented') {
-      console.warn('Persistence failed: Browser incompatible.');
-    }
-  });
-}
-*/
 
 export default app;

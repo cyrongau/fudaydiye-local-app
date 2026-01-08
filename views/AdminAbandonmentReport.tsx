@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, onSnapshot, orderBy, Timestamp, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, Timestamp, doc, deleteDoc, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { CartNode } from '../types';
 import { useAuth } from '../Providers';
@@ -25,16 +25,20 @@ const AdminAbandonmentReport: React.FC = () => {
    ];
 
    useEffect(() => {
-      let unsub = () => { };
-      try {
-         // Show carts not updated in the last 24 hours
-         const oneDayAgo = Date.now() - 86400000;
-         const q = query(
-            collection(db, "carts"),
-            where("status", "==", "ACTIVE")
-         );
+      let active = true;
 
-         unsub = onSnapshot(q, (snap) => {
+      const fetchCarts = async () => {
+         try {
+            // Show carts not updated in the last 24 hours
+            const oneDayAgo = Date.now() - 86400000;
+            const q = query(
+               collection(db, "carts"),
+               where("status", "==", "ACTIVE")
+            );
+
+            const snap = await getDocs(q);
+            if (!active) return;
+
             const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as CartNode));
 
             // Client-side filtering for > 24h and sorting
@@ -50,16 +54,15 @@ const AdminAbandonmentReport: React.FC = () => {
                setCarts(abandoned);
             }
             setLoading(false);
-         }, (err) => {
-            console.error("Abandonment Report Listener Error:", err);
+         } catch (e) {
+            console.error("Abandonment setup error", e);
             setLoading(false);
-         });
-      } catch (e) {
-         console.error("Abandonment setup error", e);
-         setLoading(false);
-      }
+         }
+      };
 
-      return () => unsub();
+      fetchCarts();
+
+      return () => { active = false; };
    }, [role, user]);
 
    const generateRecoveryPrompt = async (cart: CartNode) => {

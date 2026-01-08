@@ -1,0 +1,3 @@
+name,description,price,stock,category,image_url
+Sample Product,This is a test product,19.99,100,electronics,https://example.com/image.jpg
+Another Item,Great quality item,50.00,50,fashion,https://example.com/shirt.jpg

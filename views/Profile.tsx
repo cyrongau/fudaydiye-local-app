@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { useWallet, useAuth } from '../Providers';
-import { doc, updateDoc, increment, collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { doc, updateDoc, increment, collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, limit, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Transaction } from '../types';
 
@@ -44,6 +44,28 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
     const { auth } = await import('../lib/firebase');
     await auth.signOut();
     navigate('/');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    const confirm = window.confirm("CRITICAL WARNING: This will permanently delete your Identity Node and all associated data. This action cannot be undone. Confirm deletion?");
+    if (!confirm) return;
+
+    try {
+      // Delete Firestore Profile
+      await deleteDoc(doc(db, "users", user.uid));
+      // Delete Auth Account
+      await user.delete();
+      alert("Identity Node terminated from the mesh.");
+      navigate('/');
+    } catch (err: any) {
+      console.error("Deletion Error:", err);
+      if (err.code === 'auth/requires-recent-login') {
+        alert("Security Protocol: Re-authentication required. Please sign out and sign in again.");
+      } else {
+        alert("Termination failed: " + err.message);
+      }
+    }
   };
 
   const handleTopUp = async (e: React.FormEvent) => {
@@ -245,10 +267,24 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
             <MenuItem icon="chat_bubble" label="Direct Channel" onClick={() => navigate('/contact')} />
           </MenuSection>
 
-          <button onClick={handleSignOut} className="w-full h-16 bg-red-500/10 text-red-500 font-black text-[11px] uppercase tracking-[0.3em] rounded-[28px] flex items-center justify-center gap-3 border border-red-500/20 active:scale-95 mb-10 hover:bg-red-500/20">
-            <span className="material-symbols-outlined">logout</span>
-            Terminate Session
-          </button>
+          <MenuSection title="Protocol Override (Danger Zone)">
+            <button onClick={handleSignOut} className="w-full p-5 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-white/10 transition-all group">
+              <div className="flex items-center gap-4">
+                <div className="size-10 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-500 group-hover:text-red-500 transition-colors border border-gray-100 dark:border-white/10 shadow-sm">
+                  <span className="material-symbols-outlined text-[22px]">logout</span>
+                </div>
+                <span className="text-sm font-black text-secondary dark:text-white uppercase tracking-tighter leading-none">Terminate Session</span>
+              </div>
+            </button>
+            <button onClick={handleDeleteAccount} className="w-full p-5 flex items-center justify-between hover:bg-red-50 dark:hover:bg-red-900/10 transition-all group">
+              <div className="flex items-center gap-4">
+                <div className="size-10 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-red-500 border border-red-100 dark:border-red-900/30 shadow-sm">
+                  <span className="material-symbols-outlined text-[22px]">delete_forever</span>
+                </div>
+                <span className="text-sm font-black text-red-600 dark:text-red-400 uppercase tracking-tighter leading-none">Delete Identity Node</span>
+              </div>
+            </button>
+          </MenuSection>
         </div>
       </main >
 

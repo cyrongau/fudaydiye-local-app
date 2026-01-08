@@ -234,7 +234,12 @@ const RiderJobs: React.FC = () => {
                       </div>
                       <div>
                         <h4 className="text-base font-black text-secondary dark:text-white uppercase tracking-tighter mb-1">#{job.orderNumber}</h4>
-                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-[150px]">{job.shippingAddress}</p>
+                        <div className="flex items-center gap-2">
+                          {job.type === 'LOGISTICS' && (
+                            <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">Client Order</span>
+                          )}
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-[150px]">{job.shippingAddress}</p>
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">

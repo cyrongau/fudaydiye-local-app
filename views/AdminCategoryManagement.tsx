@@ -19,6 +19,7 @@ const AdminCategoryManagement: React.FC = () => {
    const [iconModalOpen, setIconModalOpen] = useState(false);
    const [selectedImage, setSelectedImage] = useState<string | null>(null);
    const [parentSelection, setParentSelection] = useState<string>('NULL');
+   const [editingCategory, setEditingCategory] = useState<CategoryNode | null>(null);
 
    const fetchCategories = async () => {
       setLoading(true);
@@ -54,29 +55,54 @@ const AdminCategoryManagement: React.FC = () => {
       }
    };
 
-   const handleAddCategory = async (e: React.FormEvent) => {
+   const handleSaveCategory = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!newName.trim()) return;
 
       setIsSaving(true);
       try {
-         await addDoc(collection(db, "categories"), {
-            name: newName.trim(),
-            parentId: parentSelection === 'NULL' ? null : parentSelection,
-            icon: selectedIcon,
-            imageUrl: selectedImage || '',
-            createdAt: serverTimestamp()
-         });
-         setNewName('');
-         setParentSelection('NULL');
-         setSelectedImage(null);
-         setSelectedIcon('category');
+         if (editingCategory) {
+            // Update existing
+            await updateDoc(doc(db, "categories", editingCategory.id), {
+               name: newName.trim(),
+               parentId: parentSelection === 'NULL' ? null : parentSelection,
+               icon: selectedIcon,
+               imageUrl: selectedImage || '',
+            });
+         } else {
+            // Create new
+            await addDoc(collection(db, "categories"), {
+               name: newName.trim(),
+               parentId: parentSelection === 'NULL' ? null : parentSelection,
+               icon: selectedIcon,
+               imageUrl: selectedImage || '',
+               createdAt: serverTimestamp()
+            });
+         }
+
+         resetForm();
          fetchCategories();
       } catch (err) {
          alert("Operational Failure: Could not sync taxonomy node.");
       } finally {
          setIsSaving(false);
       }
+   };
+
+   const resetForm = () => {
+      setNewName('');
+      setParentSelection('NULL');
+      setSelectedImage(null);
+      setSelectedIcon('category');
+      setEditingCategory(null);
+   };
+
+   const handleEdit = (cat: CategoryNode) => {
+      setEditingCategory(cat);
+      setNewName(cat.name);
+      setParentSelection(cat.parentId || 'NULL');
+      setSelectedIcon(cat.icon || 'category');
+      setSelectedImage(cat.imageUrl || null);
    };
 
    const handleDelete = async (id: string) => {
@@ -112,7 +138,7 @@ const AdminCategoryManagement: React.FC = () => {
                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Register new category or segment</p>
                   </div>
 
-                  <form onSubmit={handleAddCategory} className="space-y-6">
+                  <form onSubmit={handleSaveCategory} className="space-y-6">
                      <div className="space-y-1.5">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Node Identifier (Name)</label>
                         <input
@@ -174,8 +200,17 @@ const AdminCategoryManagement: React.FC = () => {
                         disabled={isSaving}
                         className="w-full h-16 bg-primary text-secondary font-black text-xs uppercase tracking-[0.3em] rounded-2xl shadow-primary-glow flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
                      >
-                        {isSaving ? <span className="animate-spin material-symbols-outlined">sync</span> : 'Initialize Taxonomy Node'}
+                        {isSaving ? <span className="animate-spin material-symbols-outlined">sync</span> : (editingCategory ? 'Update Node Configuration' : 'Initialize Taxonomy Node')}
                      </button>
+                     {editingCategory && (
+                        <button
+                           type="button"
+                           onClick={resetForm}
+                           className="w-full h-12 bg-gray-100 dark:bg-white/5 text-gray-500 font-black text-xs uppercase tracking-[0.2em] rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"
+                        >
+                           Cancel Edit
+                        </button>
+                     )}
                   </form>
                </section>
             </div>
@@ -207,6 +242,12 @@ const AdminCategoryManagement: React.FC = () => {
                                        <h4 className="text-lg font-black text-secondary dark:text-white uppercase tracking-tighter">{main.name}</h4>
                                     </div>
                                     <button
+                                       onClick={() => handleEdit(main)}
+                                       className="size-9 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-300 hover:text-primary transition-all opacity-0 group-hover:opacity-100 mr-2"
+                                    >
+                                       <span className="material-symbols-outlined text-lg">edit</span>
+                                    </button>
+                                    <button
                                        onClick={() => handleDelete(main.id)}
                                        className="size-9 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
                                     >
@@ -222,12 +263,20 @@ const AdminCategoryManagement: React.FC = () => {
                                              <span className="material-symbols-outlined text-gray-300 text-sm">subdirectory_arrow_right</span>
                                              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">{sub.name}</span>
                                           </div>
-                                          <button
-                                             onClick={() => handleDelete(sub.id)}
-                                             className="text-gray-300 hover:text-red-500 opacity-0 group-hover/sub:opacity-100 transition-all"
-                                          >
-                                             <span className="material-symbols-outlined text-[16px]">close</span>
-                                          </button>
+                                          <div className="flex gap-2 opacity-0 group-hover/sub:opacity-100 transition-all">
+                                             <button
+                                                onClick={() => handleEdit(sub)}
+                                                className="text-gray-300 hover:text-primary"
+                                             >
+                                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                                             </button>
+                                             <button
+                                                onClick={() => handleDelete(sub.id)}
+                                                className="text-gray-300 hover:text-red-500"
+                                             >
+                                                <span className="material-symbols-outlined text-[16px]">close</span>
+                                             </button>
+                                          </div>
                                        </div>
                                     ))}
                                  </div>

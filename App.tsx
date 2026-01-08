@@ -28,6 +28,7 @@ import VendorAnalytics from './views/VendorAnalytics';
 import VendorEarnings from './views/VendorEarnings';
 import VendorInventoryStatus from './views/VendorInventoryStatus';
 import VendorProductManagement from './views/VendorProductManagement';
+import VendorProductImport from './views/VendorProductImport';
 import VendorOrderFulfillment from './views/VendorOrderFulfillment';
 import VendorReviews from './views/VendorReviews';
 import VendorStoreManagement from './views/VendorStoreManagement';
@@ -42,6 +43,10 @@ import RiderDeliveryConfirmation from './views/RiderDeliveryConfirmation';
 import RiderStatusUpdates from './views/RiderStatusUpdates';
 import RiderWallet from './views/RiderWallet';
 import RiderNavigationView from './views/RiderNavigationView';
+import ClientLogistics from './views/ClientLogistics';
+import ClientAnalytics from './views/ClientAnalytics';
+import ClientInvoices from './views/ClientInvoices';
+import ClientSupport from './views/ClientSupport';
 import AdminPlatformOverview from './views/AdminPlatformOverview';
 import AdminFinancialReports from './views/AdminFinancialReports';
 import AdminVendorManagement from './views/AdminVendorManagement';
@@ -63,7 +68,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Cart from './views/Cart';
 import Checkout from './views/Checkout';
 import TrackingMap from './views/TrackingMap';
-import ClientLogistics from './views/ClientLogistics';
 import Profile from './views/Profile';
 import AdminCMSDashboard from './views/AdminCMSDashboard';
 import AdminCMSEditor from './views/AdminCMSEditor';
@@ -202,7 +206,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/customer/profile" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Profile isAuthenticated={true} /></ProtectedRoute>} />
         <Route path="/customer/track/:id" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR']}><TrackingMap /></ProtectedRoute>} />
         <Route path="/customer/live/:id" element={<LiveStream />} />
-        <Route path="/customer/personal-info" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR', 'RIDER', 'CLIENT', 'ADMIN']}><PersonalInfo /></ProtectedRoute>} />
+        <Route path="/customer/personal-info" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR', 'RIDER', 'CLIENT', 'ADMIN', 'FUDAYDIYE_ADMIN']}><PersonalInfo /></ProtectedRoute>} />
         <Route path="/customer/addresses" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><SavedAddresses /></ProtectedRoute>} />
         <Route path="/customer/payments" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><LinkedPayments /></ProtectedRoute>} />
         <Route path="/customer/scan" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><GlobalScanView role="CUSTOMER" /></ProtectedRoute>} />
@@ -215,26 +219,27 @@ const AppRoutes: React.FC = () => {
         <Route path="/blog" element={<BlogList />} />
         <Route path="/blog/:slug" element={<BlogPostDetail />} />
 
-        <Route path="/admin/cms" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminCMSDashboard /></ProtectedRoute>} />
-        <Route path="/admin/cms/edit/:type/:id" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminCMSEditor /></ProtectedRoute>} />
-        <Route path="/admin/cms/create/:type" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminCMSEditor /></ProtectedRoute>} />
-        <Route path="/admin/abandonment" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminAbandonmentReport /></ProtectedRoute>} />
-        <Route path="/admin/config" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminConfig /></ProtectedRoute>} />
-        <Route path="/admin/categories" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminCategoryManagement /></ProtectedRoute>} />
+        <Route path="/admin/cms" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminCMSDashboard /></ProtectedRoute>} />
+        <Route path="/admin/cms/edit/:type/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminCMSEditor /></ProtectedRoute>} />
+        <Route path="/admin/cms/create/:type" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminCMSEditor /></ProtectedRoute>} />
+        <Route path="/admin/abandonment" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminAbandonmentReport /></ProtectedRoute>} />
+        <Route path="/admin/config" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminConfig /></ProtectedRoute>} />
+        <Route path="/admin/categories" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminCategoryManagement /></ProtectedRoute>} />
 
-        <Route path="/vendor" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorDashboard /></ProtectedRoute>} />
-        <Route path="/vendor/management" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorProductManagement /></ProtectedRoute>} />
-        <Route path="/vendor/orders" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorOrderFulfillment /></ProtectedRoute>} />
-        <Route path="/vendor/inventory" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorInventoryStatus /></ProtectedRoute>} />
-        <Route path="/vendor/earnings" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorEarnings /></ProtectedRoute>} />
-        <Route path="/vendor/analytics" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorAnalytics /></ProtectedRoute>} />
-        <Route path="/vendor/reviews" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorReviews /></ProtectedRoute>} />
-        <Route path="/vendor/stores" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorStoreManagement /></ProtectedRoute>} />
-        <Route path="/vendor/staff" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorStoreUsers /></ProtectedRoute>} />
-        <Route path="/vendor/live-setup" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorLiveSaleSetup /></ProtectedRoute>} />
-        <Route path="/vendor/live-cockpit/:id" element={<ProtectedRoute allowedRoles={['VENDOR']}><VendorLiveCockpit /></ProtectedRoute>} />
-        <Route path="/vendor/abandonment" element={<ProtectedRoute allowedRoles={['VENDOR']}><AdminAbandonmentReport /></ProtectedRoute>} />
-        <Route path="/vendor/settings" element={<ProtectedRoute allowedRoles={['VENDOR']}><UserSettings /></ProtectedRoute>} />
+        <Route path="/vendor" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorDashboard /></ProtectedRoute>} />
+        <Route path="/vendor/management" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorProductManagement /></ProtectedRoute>} />
+        <Route path="/vendor/import" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorProductImport /></ProtectedRoute>} />
+        <Route path="/vendor/orders" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorOrderFulfillment /></ProtectedRoute>} />
+        <Route path="/vendor/inventory" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorInventoryStatus /></ProtectedRoute>} />
+        <Route path="/vendor/earnings" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorEarnings /></ProtectedRoute>} />
+        <Route path="/vendor/analytics" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorAnalytics /></ProtectedRoute>} />
+        <Route path="/vendor/reviews" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorReviews /></ProtectedRoute>} />
+        <Route path="/vendor/stores" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorStoreManagement /></ProtectedRoute>} />
+        <Route path="/vendor/staff" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorStoreUsers /></ProtectedRoute>} />
+        <Route path="/vendor/live-setup" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorLiveSaleSetup /></ProtectedRoute>} />
+        <Route path="/vendor/live-cockpit/:id" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorLiveCockpit /></ProtectedRoute>} />
+        <Route path="/vendor/abandonment" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><AdminAbandonmentReport /></ProtectedRoute>} />
+        <Route path="/vendor/settings" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><UserSettings /></ProtectedRoute>} />
 
         <Route path="/rider" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderJobs /></ProtectedRoute>} />
         <Route path="/rider/assignments" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderJobAssignmentList /></ProtectedRoute>} />
@@ -244,18 +249,25 @@ const AppRoutes: React.FC = () => {
         <Route path="/rider/wallet" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderWallet /></ProtectedRoute>} />
         <Route path="/rider/navigate/:id" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderNavigationView /></ProtectedRoute>} />
         <Route path="/rider/settings" element={<ProtectedRoute allowedRoles={['RIDER']}><UserSettings /></ProtectedRoute>} />
+
+        {/* Client Routes */}
         <Route path="/client" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientLogistics /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminPlatformOverview /></ProtectedRoute>} />
-        <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminFinancialReports /></ProtectedRoute>} />
-        <Route path="/admin/report" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminSystemReport /></ProtectedRoute>} />
-        <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminVendorManagement /></ProtectedRoute>} />
-        <Route path="/admin/vendor/:id" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminVendorProfile /></ProtectedRoute>} />
-        <Route path="/admin/riders" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminRiderManagement /></ProtectedRoute>} />
-        <Route path="/admin/rider/:id" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminRiderProfile /></ProtectedRoute>} />
-        <Route path="/admin/logistics" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminLogisticsControl /></ProtectedRoute>} />
-        <Route path="/admin/audits" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminAudits /></ProtectedRoute>} />
-        <Route path="/admin/live-moderation" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminLiveSaleModeration /></ProtectedRoute>} />
-        <Route path="/admin/hubs" element={<ProtectedRoute allowedRoles={['ADMIN']}><AdminHubs /></ProtectedRoute>} />
+        <Route path="/client/analytics" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientAnalytics /></ProtectedRoute>} />
+        <Route path="/client/invoices" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientInvoices /></ProtectedRoute>} />
+        <Route path="/client/support" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientSupport /></ProtectedRoute>} />
+        <Route path="/client/settings" element={<ProtectedRoute allowedRoles={['CLIENT']}><UserSettings /></ProtectedRoute>} />
+
+        <Route path="/admin" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminPlatformOverview /></ProtectedRoute>} />
+        <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminFinancialReports /></ProtectedRoute>} />
+        <Route path="/admin/report" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminSystemReport /></ProtectedRoute>} />
+        <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminVendorManagement /></ProtectedRoute>} />
+        <Route path="/admin/vendor/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminVendorProfile /></ProtectedRoute>} />
+        <Route path="/admin/riders" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminRiderManagement /></ProtectedRoute>} />
+        <Route path="/admin/rider/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminRiderProfile /></ProtectedRoute>} />
+        <Route path="/admin/logistics" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminLogisticsControl /></ProtectedRoute>} />
+        <Route path="/admin/audits" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminAudits /></ProtectedRoute>} />
+        <Route path="/admin/live-moderation" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminLiveSaleModeration /></ProtectedRoute>} />
+        <Route path="/admin/hubs" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminHubs /></ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['ADMIN']}><UserSettings /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

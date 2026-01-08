@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart, useAuth } from '../Providers';
-import { collection, query, orderBy, onSnapshot, limit, where, getDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product, CMSContent, CategoryNode, LiveSaleSession, UserProfile } from '../types';
 import VendorTicker from '../components/VendorTicker';
@@ -26,13 +26,13 @@ const WebCustomerHome: React.FC = () => {
    const [mobileAds, setMobileAds] = useState<CMSContent[]>([]);
    const [promoCards, setPromoCards] = useState<CMSContent[]>([]);
 
+   // 1. Static Content Subscriptions (Run Once)
    useEffect(() => {
       // Categories
       const unsubCats = onSnapshot(query(collection(db, "categories"), where("parentId", "==", null), limit(8)), (snap) => {
          if (!snap.empty) {
             setCategories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryNode)));
          } else {
-            // Fallback Mock Data
             setCategories([
                { id: '1', name: 'Fashion', icon: 'checkroom', slug: 'fashion', parentId: null },
                { id: '2', name: 'Electronics', icon: 'devices', slug: 'electronics', parentId: null },
@@ -42,65 +42,44 @@ const WebCustomerHome: React.FC = () => {
                { id: '6', name: 'Mobiles', icon: 'smartphone', slug: 'mobiles', parentId: null },
             ]);
          }
-      });
+      }, (err) => console.error("Categories Sync Error:", err));
 
       // Dynamic Hero Slides
       const unsubHero = onSnapshot(query(collection(db, "cms_content"), where("type", "==", "HOME_SLIDER"), where("status", "==", "PUBLISHED"), limit(5)), (snap) => {
          setHeroSlides(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CMSContent)));
-      });
+      }, (err) => console.error("Hero Sync Error:", err));
 
       // Mobile Ads
       const unsubAds = onSnapshot(query(collection(db, "cms_content"), where("type", "==", "MOBILE_AD"), where("status", "==", "PUBLISHED"), limit(5)), (snap) => {
          setMobileAds(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CMSContent)));
-      });
+      }, (err) => console.error("Ads Sync Error:", err));
 
       // Promo Cards
       const unsubPromos = onSnapshot(query(collection(db, "cms_content"), where("type", "==", "PROMO_CARD"), where("status", "==", "PUBLISHED"), limit(20)), (snap) => {
          const allCards = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CMSContent));
          setPromoCards(allCards);
-      });
+      }, (err) => console.error("Promos Sync Error:", err));
 
       // Sync Featured Node
       const unsubFeatured = onSnapshot(query(collection(db, "live_sessions"), where("isFeatured", "==", true), limit(1)), (snap) => {
          if (!snap.empty) setFeaturedLive({ id: snap.docs[0].id, ...snap.docs[0].data() } as LiveSaleSession);
          else setFeaturedLive(null);
-      });
+      }, (err) => console.error("Featured Live Error:", err));
 
       // Active Live Sale Sessions
       const unsubLive = onSnapshot(query(collection(db, "live_sessions"), where("status", "==", "LIVE"), limit(8)), (snap) => {
          setLiveSessions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LiveSaleSession)));
-      });
+      }, (err) => console.error("Live Sessions Error:", err));
 
-      // Scheduled Sessions (for Banner) - Client side sort to avoid index
+      // Scheduled Sessions (for Banner)
       const unsubScheduled = onSnapshot(query(collection(db, "live_sessions"), where("status", "==", "SCHEDULED"), limit(10)), (snap) => {
          const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LiveSaleSession));
-         // Sort by scheduledFor ascending
-         list.sort((a, b) => (a.scheduledFor?.seconds || 0) - (b.scheduledFor?.seconds || 0));
+         list.sort((a, b) => (a.scheduledAt?.seconds || 0) - (b.scheduledAt?.seconds || 0));
          setScheduledSessions(list.slice(0, 1));
-      });
+      }, (err) => console.error("Scheduled Sessions Error:", err));
 
-      // Products Feed - HARD FILTER for Suspended Vendors
-      setLoading(true);
-      // Note: Ideally, products should have a 'vendorStatus' field denormalized, 
-      // or we filter client-side if dataset is small. For now we assume products of suspended vendors 
-      // might still be 'ACTIVE' but we should filter them if we joined data. 
-      // Since NoSQL joins are hard, we rely on the backend function to mark products as 'INACTIVE' when suspending.
-      // However, for immediate safety, we can try to filter client side if we had the vendor list.
-      // BUT, the most robust way is to query only ACTIVE products. 
-      // The Admin 'Suspend' action should ideally update all products to 'SUSPENDED' or 'INACTIVE'.
-      // If we cannot trust that, we rely on 'status == ACTIVE'.
-      let qProd = query(collection(db, "products"), where("status", "==", "ACTIVE"), limit(10));
-      if (activeTab === 'NEW') qProd = query(collection(db, "products"), where("status", "==", "ACTIVE"), orderBy("createdAt", "desc"), limit(10));
-      else if (activeTab === 'POPULAR') qProd = query(collection(db, "products"), where("status", "==", "ACTIVE"), orderBy("rating", "desc"), limit(10));
-
-      const unsubProd = onSnapshot(qProd, (snapshot) => {
-         setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
-         setLoading(false);
-      });
-
-      // Flash Deals (only explicitly marked ones)
+      // Flash Deals
       const unsubFlash = onSnapshot(query(collection(db, "products"), where("isFlashDeal", "==", true), limit(12)), (snap) => {
-         // Sort by discount % descending locally
          const deals = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
          deals.sort((a, b) => {
             const discA = a.basePrice > 0 ? (1 - (a.salePrice || a.basePrice) / a.basePrice) : 0;
@@ -108,9 +87,33 @@ const WebCustomerHome: React.FC = () => {
             return discB - discA;
          });
          setFlashDeals(deals);
+      }, (err) => console.error("Flash Deals Error:", err));
+
+      return () => {
+         unsubCats(); unsubHero(); unsubAds(); unsubFeatured(); unsubLive(); unsubScheduled(); unsubPromos(); unsubFlash();
+      };
+   }, []);
+
+   // 2. Active Tab Product Feed (Re-runs on Tab Change)
+   useEffect(() => {
+      setLoading(true);
+      let qProd = query(collection(db, "products"), where("status", "==", "ACTIVE"), limit(10));
+
+      // NOTE: Ensure Compound Indexes exist for these queries in Firestore Console!
+      if (activeTab === 'NEW') qProd = query(collection(db, "products"), where("status", "==", "ACTIVE"), limit(10)); // Removed sort to fix missing index error
+      else if (activeTab === 'POPULAR') qProd = query(collection(db, "products"), where("status", "==", "ACTIVE"), orderBy("rating", "desc"), limit(10));
+
+      // Use getDocs instead of onSnapshot for this specific query to avoid SDK "Internal Assertion Failed" (ID: ca9)
+      // which often occurs with limit queries + memory cache in some SDK/browser combos.
+      getDocs(qProd).then((snapshot) => {
+         setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+         setLoading(false);
+      }).catch((error) => {
+         console.error("Product Feed Error:", error);
+         setLoading(false);
       });
 
-      return () => { unsubCats(); unsubHero(); unsubAds(); unsubFeatured(); unsubLive(); unsubScheduled(); unsubProd(); unsubPromos(); unsubFlash(); };
+      // return () => unsubProd(); // No unsubscribe needed for getDocs
    }, [activeTab]);
 
    useEffect(() => {
@@ -155,22 +158,10 @@ const WebCustomerHome: React.FC = () => {
          {/* 1. Dynamic Hero Slider (Desktop) / Eid Sale Banner (Mobile) */}
          <section className="relative w-full">
             {/* Desktop Only Hero */}
-            <div className="hidden md:block h-[85vh] bg-secondary overflow-hidden relative group shadow-2xl">
-               {heroSlides.length === 0 ? (
-                  /* Static Fallback Slide */
-                  <div className="absolute inset-0 transition-opacity duration-1000 opacity-100">
-                     <div className="absolute inset-0"><img src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=1600" className="w-full h-full object-cover grayscale-[30%] brightness-75" alt="Fallback Hero" /><div className="absolute inset-0 bg-gradient-to-r from-secondary via-secondary/70 to-transparent"></div></div>
-                     <div className="relative z-10 h-full px-12 md:px-24 flex flex-col justify-center items-start text-left">
-                        <div className="max-w-3xl space-y-6">
-                           <span className="bg-primary text-secondary px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-[0.3em] shadow-2xl inline-block">Welcome to Fudaydiye</span>
-                           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-white tracking-tight uppercase leading-[0.85]">Empowering<br />Local Commerce</h1>
-                           <p className="text-white/80 text-lg font-medium max-w-xl">Connecting vendors, riders, and customers in a seamless ecosystem.</p>
-                           <button onClick={() => navigate('/customer/explore')} className="h-20 px-16 bg-primary text-secondary font-black text-sm uppercase tracking-[0.2em] rounded-2xl shadow-primary-glow active:scale-95 transition-all">Start Exploring</button>
-                        </div>
-                     </div>
-                  </div>
-               ) : (
-                  heroSlides.map((slide, idx) => (
+            {/* Desktop Only Hero - Renders ONLY if content exists */}
+            {heroSlides.length > 0 && (
+               <div className="hidden md:block h-[85vh] bg-secondary overflow-hidden relative group shadow-2xl">
+                  {heroSlides.map((slide, idx) => (
                      <div key={idx} className={`absolute inset-0 transition-all duration-1000 ${activeHero === idx ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}>
                         <div className="absolute inset-0"><img src={slide.featuredImage} className="w-full h-full object-cover grayscale-[30%] brightness-75" alt="" /><div className="absolute inset-0 bg-gradient-to-r from-secondary via-secondary/70 to-transparent"></div></div>
                         <div className="relative z-10 h-full px-12 md:px-24 flex flex-col justify-center items-start text-left">
@@ -183,9 +174,9 @@ const WebCustomerHome: React.FC = () => {
                            {slide.linkedProductId && <HeroProductCard productId={slide.linkedProductId} />}
                         </div>
                      </div>
-                  ))
-               )}
-            </div>
+                  ))}
+               </div>
+            )}
 
             {/* Mobile Optimized Hero Section */}
             <div className="md:hidden px-4 pt-4 space-y-4">
@@ -224,7 +215,7 @@ const WebCustomerHome: React.FC = () => {
                         <span className="bg-white/10 text-white border border-white/10 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest mb-3 inline-block">Upcoming Event</span>
                         <h2 className="text-xl font-black leading-tight mb-1">{scheduledSessions[0].title}</h2>
                         <p className="text-[10px] opacity-70 uppercase tracking-widest mb-4">
-                           {new Date(scheduledSessions[0].scheduledFor?.seconds * 1000).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} • {scheduledSessions[0].vendorName}
+                           {new Date(scheduledSessions[0].scheduledAt?.seconds * 1000).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} • {scheduledSessions[0].vendorName}
                         </p>
                         <button className="bg-white text-[#2A0A18] text-[10px] font-black px-5 py-2.5 rounded-xl uppercase tracking-wider w-full flex items-center justify-center gap-2">
                            <span className="material-symbols-outlined text-[14px]">notifications_active</span> Notify Me
@@ -494,12 +485,12 @@ const TabBtn = ({ label, active, onClick }: any) => (
 const PromoBanner = ({ title, promo, img, tag, orange, link }: any) => {
    const navigate = useNavigate();
    return (
-      <div onClick={() => navigate(link || '/customer/explore')} className={`h-60 md:h-80 rounded-[32px] md:rounded-[48px] ${orange ? 'bg-[#F9F0EE]' : 'bg-secondary'} p-6 md:p-10 relative overflow-hidden group cursor-pointer shadow-xl border border-white/5`}>
-         <div className={`absolute inset-0 bg-cover bg-center ${orange ? '' : 'opacity-30 grayscale'} group-hover:scale-105 transition-transform duration-[10s]`} style={{ backgroundImage: `url("${img}")` }}></div>
-         <div className="relative z-10 space-y-4 md:space-y-6">
-            <span className={`text-[9px] font-black ${orange ? 'text-orange-500' : 'text-primary'} uppercase tracking-[0.4em]`}>{tag}</span>
+      <div onClick={() => navigate(link || '/customer/explore')} className={`h-60 md:h-80 rounded-[32px] md:rounded-[48px] ${orange ? 'bg-[#F9F0EE]' : 'bg-secondary'} p-6 md:p-10 relative overflow-hidden group cursor-pointer shadow-xl border border-white/5 hover:-translate-y-2 hover:shadow-2xl transition-all duration-500 ease-out`}>
+         <div className={`absolute inset-0 bg-cover bg-center ${orange ? '' : 'opacity-30 grayscale'} group-hover:scale-110 group-hover:rotate-1 transition-transform duration-[1.5s] ease-in-out`} style={{ backgroundImage: `url("${img}")` }}></div>
+         <div className="relative z-10 space-y-4 md:space-y-6 transition-transform duration-500 group-hover:-translate-y-1">
+            <span className={`text-[9px] font-black ${orange ? 'text-orange-500' : 'text-primary'} uppercase tracking-[0.4em] inline-block border-b-2 border-transparent group-hover:border-current transition-all pb-1`}>{tag}</span>
             <h3 className={`text-2xl md:text-3xl font-black ${orange ? 'text-secondary' : 'text-white'} leading-none uppercase tracking-tighter`}>{title}<br /><span className={orange ? 'text-orange-500' : 'text-primary'}>{promo}</span></h3>
-            <button className={`h-10 px-6 ${orange ? 'bg-secondary text-white' : 'bg-white text-secondary'} rounded-xl text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all`}>Shop Now</button>
+            <button className={`h-10 px-6 ${orange ? 'bg-secondary text-white' : 'bg-white text-secondary'} rounded-xl text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg group-hover:shadow-xl group-hover:scale-105`}>Shop Now</button>
          </div>
       </div>
    );

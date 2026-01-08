@@ -72,8 +72,8 @@ const RiderJobAssignmentList: React.FC = () => {
           <button
             onClick={() => setActiveTab('ACTIVE')}
             className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'ACTIVE'
-                ? 'bg-white dark:bg-surface-dark text-secondary dark:text-primary shadow-sm'
-                : 'text-gray-400'
+              ? 'bg-white dark:bg-surface-dark text-secondary dark:text-primary shadow-sm'
+              : 'text-gray-400'
               }`}
           >
             Active ({activeJobs.length})
@@ -81,8 +81,8 @@ const RiderJobAssignmentList: React.FC = () => {
           <button
             onClick={() => setActiveTab('HISTORY')}
             className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'HISTORY'
-                ? 'bg-white dark:bg-surface-dark text-secondary dark:text-primary shadow-sm'
-                : 'text-gray-400'
+              ? 'bg-white dark:bg-surface-dark text-secondary dark:text-primary shadow-sm'
+              : 'text-gray-400'
               }`}
           >
             History ({completedJobs.length})
@@ -113,6 +113,7 @@ const RiderJobAssignmentList: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <h4 className="text-sm font-black text-secondary dark:text-white leading-none uppercase">#{job.orderNumber}</h4>
                           {job.isAtomic && <span className="bg-red-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">ATOMIC</span>}
+                          {job.type === 'LOGISTICS' && <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest">Client Order</span>}
                         </div>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1.5">{job.customerName}</p>
                       </div>

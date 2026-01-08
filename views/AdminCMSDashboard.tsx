@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, onSnapshot, orderBy, deleteDoc, doc, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, deleteDoc, doc, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { CMSContent } from '../types';
 import AdminMobileAds from './AdminMobileAds';
@@ -16,22 +16,26 @@ const AdminCMSDashboard: React.FC = () => {
     // Only fetch for generic tabs
     if (activeTab === 'MOBILE_AD' || activeTab === 'LIVE_OPS') return;
 
-    let unsub = () => { };
-    try {
-      const q = query(collection(db, "cms_content"), orderBy("updatedAt", "desc"));
-      unsub = onSnapshot(q, (snap) => {
-        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CMSContent));
-        setItems(data);
-        setLoading(false);
-      }, (error: any) => {
-        console.error("CMS Fetch Error:", error);
-        setLoading(false);
-      });
-    } catch (e) {
-      console.error("CMS setup error", e);
-      setLoading(false);
-    }
-    return () => unsub();
+    let active = true;
+
+    const fetchCMS = async () => {
+      setLoading(true);
+      try {
+        const q = query(collection(db, "cms_content"), orderBy("updatedAt", "desc"));
+        const snap = await getDocs(q);
+        if (active) {
+          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CMSContent));
+          setItems(data);
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error("CMS setup error", e);
+        if (active) setLoading(false);
+      }
+    };
+
+    fetchCMS();
+    return () => { active = false; };
   }, [activeTab]);
 
   const filteredItems = items.filter(item => item.type === activeTab);

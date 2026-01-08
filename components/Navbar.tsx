@@ -63,7 +63,8 @@ const Navbar: React.FC = () => {
         VENDOR: '/vendor',
         RIDER: '/rider',
         CLIENT: '/client',
-        ADMIN: '/admin'
+        ADMIN: '/admin',
+        FUDAYDIYE_ADMIN: '/vendor'
       };
       let targetRole = role;
       if (!targetRole && user.email === 'admin@fudaydiye.so') targetRole = 'ADMIN';

@@ -151,7 +151,11 @@ const DashboardHeader: React.FC = () => {
                 <p className="text-[8px] font-bold text-gray-400 truncate mt-1">{profile?.email}</p>
               </div>
               <DropdownItem icon="account_circle" label="My Identity" onClick={() => { navigate('/customer/personal-info'); setIsProfileOpen(false); }} />
-              <DropdownItem icon="verified_user" label={role === 'RIDER' ? 'Verification Hub' : 'Security Settings'} onClick={() => { navigate(`/${role?.toLowerCase()}/settings`); setIsProfileOpen(false); }} />
+              <DropdownItem icon="verified_user" label={role === 'RIDER' ? 'Verification Hub' : 'Security Settings'} onClick={() => {
+                const basePath = role === 'FUDAYDIYE_ADMIN' ? '/vendor' : `/${role?.toLowerCase()}`;
+                navigate(`${basePath}/settings`);
+                setIsProfileOpen(false);
+              }} />
               <DropdownItem icon="hub" label="Identity Hub" onClick={() => { navigate('/select-identity'); setIsProfileOpen(false); }} />
               <div className="h-px bg-gray-50 dark:bg-white/5 my-2 mx-4"></div>
               <button onClick={handleLogout} className="w-full flex items-center gap-3 px-6 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-left group transition-all">

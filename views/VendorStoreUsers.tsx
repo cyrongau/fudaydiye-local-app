@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { useAuth, useCart } from '../Providers';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { VendorUser, Store } from '../types';
 
@@ -26,26 +26,44 @@ const VendorStoreUsers: React.FC = () => {
 
   // 1. Fetch available store nodes for assignment
   useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, "stores"), where("vendorId", "==", user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setStores(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Store)));
-    });
-    return () => unsubscribe();
+    let active = true;
+
+    const fetchStores = async () => {
+      if (!user) return;
+      try {
+        const q = query(collection(db, "stores"), where("vendorId", "==", user.uid));
+        const snapshot = await getDocs(q);
+        if (active) {
+          setStores(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Store)));
+        }
+      } catch (err) { }
+    };
+
+    fetchStores();
+    return () => { active = false; };
   }, [user]);
 
   // 2. Fetch all staff members linked to this vendor
   useEffect(() => {
-    if (!user) return;
+    let active = true;
+    const fetchUsers = async () => {
+      if (!user) return;
+      try {
+        // In this model, staff are users with a `vendorId` field matching the owner
+        const q = query(collection(db, "users"), where("parentVendorId", "==", user.uid));
+        const snapshot = await getDocs(q);
 
-    // In this model, staff are users with a `vendorId` field matching the owner
-    const q = query(collection(db, "users"), where("parentVendorId", "==", user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
-      setLoading(false);
-    });
+        if (active) {
+          setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+          setLoading(false);
+        }
+      } catch (err) {
+        if (active) setLoading(false);
+      }
+    };
 
-    return () => unsubscribe();
+    fetchUsers();
+    return () => { active = false; };
   }, [user]);
 
   const handleAddStaff = async (e: React.FormEvent) => {
@@ -133,15 +151,15 @@ const VendorStoreUsers: React.FC = () => {
         </section>
 
         {/* Filter Bar */}
-        <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-2xl border border-gray-200 dark:border-white/10">
+        <div className="flex bg-gray-100/50 dark:bg-white/5 p-1.5 rounded-2xl border border-gray-200/50 dark:border-white/5 gap-1">
           {(['ALL', 'MANAGERS', 'STAFF'] as const).map(f => (
             <button
               key={f}
               onClick={() => setActiveFilter(f)}
-              className={`flex - 1 py - 2.5 rounded - xl text - [10px] font - black uppercase tracking - widest transition - all ${activeFilter === f
-                  ? 'bg-white dark:bg-surface-dark text-secondary dark:text-primary shadow-sm'
-                  : 'text-gray-400'
-                } `}
+              className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeFilter === f
+                ? 'bg-white dark:bg-surface-dark text-primary shadow-sm ring-1 ring-black/5 dark:ring-white/10'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-white/5'
+                }`}
             >
               {f}
             </button>

@@ -1,5 +1,5 @@
 
-export type UserRole = 'CUSTOMER' | 'VENDOR' | 'RIDER' | 'CLIENT' | 'ADMIN';
+export type UserRole = 'CUSTOMER' | 'VENDOR' | 'RIDER' | 'CLIENT' | 'ADMIN' | 'FUDAYDIYE_ADMIN';
 export type ProductType = 'SIMPLE' | 'VARIABLE' | 'EXTERNAL';
 export type VideoProvider = 'AGORA' | 'LIVEKIT';
 
@@ -62,6 +62,12 @@ export interface Product {
   attributes: ProductAttribute[];
   variations: ProductVariation[];
   createdAt?: any;
+  // Dropshipping Fields
+  isDropship?: boolean;
+  sourceOrigin?: 'AMAZON_UAE' | 'ALIBABA' | 'ALIEXPRESS' | 'NONE';
+  sourceId?: string;
+  weightKg?: number;
+  markupPercentage?: number;
   isExternal?: boolean;
   externalUrl?: string;
   originCountry?: string;

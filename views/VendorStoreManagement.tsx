@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { useAuth } from '../Providers';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Store } from '../types';
 
@@ -26,15 +26,25 @@ const VendorStoreManagement: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!user) return;
+    let active = true;
 
-    const q = query(collection(db, "stores"), where("vendorId", "==", user.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setStores(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Store)));
-      setLoading(false);
-    });
+    const fetchStores = async () => {
+      if (!user) return;
+      try {
+        const q = query(collection(db, "stores"), where("vendorId", "==", user.uid));
+        const snapshot = await getDocs(q);
+        if (active) {
+          setStores(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Store)));
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Store fetch error:", err);
+        if (active) setLoading(false);
+      }
+    };
 
-    return () => unsubscribe();
+    fetchStores();
+    return () => { active = false; };
   }, [user]);
 
   const handleOpenAddModal = () => {

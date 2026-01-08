@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { GoogleGenAI } from "@google/genai";
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { useToast } from '../context/ToastContext';
@@ -10,7 +10,7 @@ import { useToast } from '../context/ToastContext';
 const AdminConfig: React.FC = () => {
   const navigate = useNavigate();
   const { success: toastSuccess, error: toastError } = useToast();
-  const [activeTab, setActiveTab] = useState<'PARAMETERS' | 'DIRECT_APIS' | 'GOOGLE_MAPS' | 'VIDEO_MESH' | 'BUSINESS' | 'COMMUNICATIONS'>('BUSINESS');
+  const [activeTab, setActiveTab] = useState<'PARAMETERS' | 'DIRECT_APIS' | 'GOOGLE_MAPS' | 'VIDEO_MESH' | 'BUSINESS' | 'COMMUNICATIONS' | 'INTEGRATIONS'>('BUSINESS');
   const [isAiAuditing, setIsAiAuditing] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -33,7 +33,11 @@ const AdminConfig: React.FC = () => {
     agora: { appId: '', certificate: '', active: false },
     livekit: { apiKey: '', apiSecret: '', host: '', active: false },
     whatsapp: { phoneId: '', token: '', namespace: '', active: false },
-    sms: { provider: 'twilio', apiKey: '', senderId: '', sid: '', active: false }
+    sms: { provider: 'twilio', apiKey: '', senderId: '', sid: '', active: false },
+    // Dropshipping
+    amazonUae: { apiKey: '', secretKey: '', marketplaceId: '', active: false },
+    alibaba: { apiKey: '', secretKey: '', active: false },
+    aliexpress: { apiKey: '', secretKey: '', active: false },
   });
 
   const [business, setBusiness] = useState({
@@ -53,26 +57,38 @@ const AdminConfig: React.FC = () => {
   });
 
   useEffect(() => {
-    let unsub = () => { };
-    try {
-      unsub = onSnapshot(doc(db, "system_config", "global"), (snap) => {
+    let active = true;
+
+    const fetchConfig = async () => {
+      try {
+        const snap = await getDoc(doc(db, "system_config", "global"));
+        if (!active) return;
+
         if (snap.exists()) {
           const data = snap.data();
-          if (data.integrations) setIntegrations(prev => ({ ...prev, ...data.integrations }));
+          if (data.integrations) {
+            setIntegrations(prev => ({
+              ...prev,
+              ...data.integrations,
+              // Ensure structural integrity for deep keys if missing in fetched data
+              amazonUae: data.integrations.amazonUae || prev.amazonUae,
+              alibaba: data.integrations.alibaba || prev.alibaba,
+              aliexpress: data.integrations.aliexpress || prev.aliexpress,
+            }));
+          }
           if (data.settings) setSettings(prev => ({ ...prev, ...data.settings }));
           if (data.business) setBusiness(prev => ({ ...prev, ...data.business }));
         }
         setLoading(false);
-      }, (error) => {
-        console.error("Config fetch error:", error);
-        // alert(`Config Access Error: ${error.message}`); // Suppress alert to prevent annoyance
+      } catch (e) {
+        console.error("Config fetch error", e);
         setLoading(false);
-      });
-    } catch (e) {
-      console.error("Config setup error", e);
-      setLoading(false);
-    }
-    return () => unsub();
+      }
+    };
+
+    fetchConfig();
+
+    return () => { active = false; };
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
@@ -155,7 +171,7 @@ const AdminConfig: React.FC = () => {
   const runAiAudit = async () => {
     setIsAiAuditing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Audit the following direct commerce integrations for Fudaydiye: ZAAD, eDahab, Sahal, EVC Plus, and Premier Bank API. Verify that removing Mobile Pay in favor of direct telco API links improves transaction reliability and reduces cost for local merchants in Hargeisa.`,
@@ -193,7 +209,7 @@ const AdminConfig: React.FC = () => {
           >
             Business Identity
           </button>
-          {(['PARAMETERS', 'DIRECT_APIS', 'COMMUNICATIONS', 'GOOGLE_MAPS', 'VIDEO_MESH'] as const).map(tab => (
+          {(['PARAMETERS', 'DIRECT_APIS', 'COMMUNICATIONS', 'INTEGRATIONS', 'GOOGLE_MAPS', 'VIDEO_MESH'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -574,6 +590,63 @@ const AdminConfig: React.FC = () => {
                 )}
               </div>
             </IntegrationCard>
+          </section>
+        )}
+
+        {activeTab === 'INTEGRATIONS' && (
+          <section className="space-y-8">
+            <IntegrationCard
+              name="Amazon UAE"
+              desc="Direct Catalog Import"
+              icon="shopping_cart"
+              active={integrations.amazonUae?.active}
+              onToggle={() => setIntegrations({ ...integrations, amazonUae: { ...integrations.amazonUae, active: !integrations.amazonUae?.active } })}
+            >
+              <div className="space-y-4 pt-4">
+                <CredentialField label="AWS Access Key" value={integrations.amazonUae?.apiKey || ''} onChange={(val) => setIntegrations({ ...integrations, amazonUae: { ...integrations.amazonUae, apiKey: val } })} />
+                <CredentialField label="AWS Secret Key" value={integrations.amazonUae?.secretKey || ''} onChange={(val) => setIntegrations({ ...integrations, amazonUae: { ...integrations.amazonUae, secretKey: val } })} isSecret />
+                <CredentialField label="Marketplace ID" value={integrations.amazonUae?.marketplaceId || ''} onChange={(val) => setIntegrations({ ...integrations, amazonUae: { ...integrations.amazonUae, marketplaceId: val } })} />
+              </div>
+            </IntegrationCard>
+
+            <IntegrationCard
+              name="Alibaba"
+              desc="Wholesale Source Node"
+              icon="factory"
+              active={integrations.alibaba?.active}
+              onToggle={() => setIntegrations({ ...integrations, alibaba: { ...integrations.alibaba, active: !integrations.alibaba?.active } })}
+            >
+              <div className="space-y-4 pt-4">
+                <CredentialField label="App Key" value={integrations.alibaba?.apiKey || ''} onChange={(val) => setIntegrations({ ...integrations, alibaba: { ...integrations.alibaba, apiKey: val } })} />
+                <CredentialField label="App Secret" value={integrations.alibaba?.secretKey || ''} onChange={(val) => setIntegrations({ ...integrations, alibaba: { ...integrations.alibaba, secretKey: val } })} isSecret />
+              </div>
+            </IntegrationCard>
+
+            <IntegrationCard
+              name="AliExpress"
+              desc="Dropship Source Node"
+              icon="package_2"
+              active={integrations.aliexpress?.active}
+              onToggle={() => setIntegrations({ ...integrations, aliexpress: { ...integrations.aliexpress, active: !integrations.aliexpress?.active } })}
+            >
+              <div className="space-y-4 pt-4">
+                <CredentialField label="App Key" value={integrations.aliexpress?.apiKey || ''} onChange={(val) => setIntegrations({ ...integrations, aliexpress: { ...integrations.aliexpress, apiKey: val } })} />
+                <CredentialField label="App Secret" value={integrations.aliexpress?.secretKey || ''} onChange={(val) => setIntegrations({ ...integrations, aliexpress: { ...integrations.aliexpress, secretKey: val } })} isSecret />
+              </div>
+            </IntegrationCard>
+
+            <ConfigGroup title="Global Logistics Logic">
+              <div className="p-8 flex items-center justify-between">
+                <div>
+                  <p className="text-base font-black text-secondary dark:text-white leading-tight uppercase tracking-tighter">Default Markup</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-2">Added to landed cost</p>
+                </div>
+                <div className="flex items-center gap-3 bg-gray-100 dark:bg-white/5 px-4 py-3 rounded-2xl border border-gray-100 dark:border-white/10">
+                  <input type="number" defaultValue="30" className="w-14 bg-transparent border-none p-0 text-lg font-black focus:ring-0 text-right text-secondary dark:text-white" />
+                  <span className="text-lg font-black text-primary">%</span>
+                </div>
+              </div>
+            </ConfigGroup>
           </section>
         )}
 

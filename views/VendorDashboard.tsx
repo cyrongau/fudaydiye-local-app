@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DocumentModal from '../components/DocumentModal';
 import { GoogleGenAI } from "@google/genai";
-import { collection, query, where, onSnapshot, orderBy, doc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../Providers';
 import AdminAbandonmentReport from './AdminAbandonmentReport';
@@ -40,52 +40,57 @@ const VendorDashboard: React.FC = () => {
    useEffect(() => {
       if (!user?.uid) return;
 
-      // 1. Fetch Orders (Sales & Activity) - Simplified Query
-      const qOrders = query(collection(db, "orders"), where("vendorId", "==", user.uid));
-      const unsubOrders = onSnapshot(qOrders, (snap) => {
-         let totalSales = 0;
-         let active = 0;
-         let pending = 0;
-         const orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      const fetchData = async () => {
+         try {
+            // 1. Fetch Orders (Sales & Activity)
+            const qOrders = query(collection(db, "orders"), where("vendorId", "==", user.uid));
+            const orderSnap = await getDocs(qOrders);
 
-         // Client-side Sort
-         orders.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            let totalSales = 0;
+            let active = 0;
+            let pending = 0;
+            const orders = orderSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
-         orders.forEach(order => {
-            const orderTotal = Number(order.total) || Number(order.totalAmount) || 0;
-            const status = (order.status || '').toUpperCase();
+            // Client-side Sort
+            orders.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
-            if (status === 'DELIVERED') totalSales += orderTotal;
-            if (['PENDING', 'ACCEPTED', 'PROCESSING', 'PICKED_UP'].includes(status)) active++;
-            if (status === 'PENDING') pending++;
-         });
+            orders.forEach(order => {
+               let orderTotal = Number(order.total) || Number(order.totalAmount);
+               if (isNaN(orderTotal)) orderTotal = 0;
 
-         setStats(prev => ({ ...prev, sales: totalSales, activeOrders: active, pendingShipment: pending }));
-         setRecentOrders(orders.slice(0, 5));
+               const status = (order.status || '').toUpperCase();
 
-         // Calculate Top Products based on recent orders (Basic logic)
-         const productCounts: Record<string, any> = {};
-         orders.forEach(order => {
-            order.items?.forEach((item: any) => {
-               if (!productCounts[item.productId]) {
-                  productCounts[item.productId] = { name: item.name, sold: 0, img: item.image };
-               }
-               productCounts[item.productId].sold += item.qty || 1;
+               if (status === 'DELIVERED') totalSales += orderTotal;
+               if (['PENDING', 'ACCEPTED', 'PROCESSING', 'PICKED_UP'].includes(status)) active++;
+               if (status === 'PENDING') pending++;
             });
-         });
-         setTopProducts(Object.values(productCounts).sort((a: any, b: any) => b.sold - a.sold).slice(0, 5));
-      });
 
-      // 2. Fetch Products (Inventory Stats)
-      const qProducts = query(collection(db, "products"), where("vendorId", "==", user.uid), where("status", "==", "ACTIVE"));
-      const unsubProducts = onSnapshot(qProducts, (snap) => {
-         setStats(prev => ({ ...prev, activeProducts: snap.size }));
-      });
+            setStats(prev => ({ ...prev, sales: totalSales, activeOrders: active, pendingShipment: pending }));
+            setRecentOrders(orders.slice(0, 5));
 
-      return () => {
-         unsubOrders();
-         unsubProducts();
+            // Calculate Top Products based on recent orders (Basic logic)
+            const productCounts: Record<string, any> = {};
+            orders.forEach(order => {
+               order.items?.forEach((item: any) => {
+                  if (!productCounts[item.productId]) {
+                     productCounts[item.productId] = { name: item.name, sold: 0, img: item.image };
+                  }
+                  productCounts[item.productId].sold += item.qty || 1;
+               });
+            });
+            setTopProducts(Object.values(productCounts).sort((a: any, b: any) => b.sold - a.sold).slice(0, 5));
+
+            // 2. Fetch Products (Inventory Stats)
+            const qProducts = query(collection(db, "products"), where("vendorId", "==", user.uid), where("status", "==", "ACTIVE"));
+            const productSnap = await getDocs(qProducts);
+            setStats(prev => ({ ...prev, activeProducts: productSnap.size }));
+
+         } catch (error) {
+            console.error("Dashboard Data Error:", error);
+         }
       };
+
+      fetchData();
    }, [user]);
 
    const formatCurrency = (amount: number) => {
@@ -109,7 +114,7 @@ const VendorDashboard: React.FC = () => {
             </div>
          </div>
 
-         <div className="px-6 space-y-6 animate-in slide-in-from-bottom duration-500 pt-6">
+         <div className="px-6 space-y-6 pt-6">
             {/* Greeting */}
             <div>
                <h1 className="text-2xl font-black text-secondary dark:text-white">
@@ -165,6 +170,7 @@ const VendorDashboard: React.FC = () => {
                <h3 className="text-sm font-black text-secondary dark:text-white mb-3">Quick Actions</h3>
                <div className="flex gap-4 overflow-x-auto no-scrollbar py-1">
                   <QuickAction icon="inventory_2" label="Products" color="bg-orange-100 text-orange-600" onClick={() => navigate('/vendor/inventory')} />
+                  <QuickAction icon="upload_file" label="Import" color="bg-teal-100 text-teal-600" onClick={() => navigate('/vendor/import')} />
                   {profile?.canStream && <QuickAction icon="campaign" label="Promote" color="bg-purple-100 text-purple-600" onClick={() => navigate('/vendor/live-setup')} />}
                   <QuickAction icon="bar_chart" label="Analytics" color="bg-blue-100 text-blue-600" onClick={() => navigate('/vendor/analytics')} />
                   <QuickAction icon="reviews" label="Reviews" color="bg-yellow-100 text-yellow-600" onClick={() => navigate('/vendor/reviews')} />
