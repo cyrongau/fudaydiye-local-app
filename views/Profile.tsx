@@ -242,7 +242,7 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
 
           <MenuSection title="Network Support">
             <MenuItem icon="help_center" label="Platform Docs" onClick={() => navigate('/faq')} />
-            <MenuItem icon="chat_bubble" label="Direct Channel" onClick={() => navigate('/customer/support-chat')} />
+            <MenuItem icon="chat_bubble" label="Direct Channel" onClick={() => navigate('/contact')} />
           </MenuSection>
 
           <button onClick={handleSignOut} className="w-full h-16 bg-red-500/10 text-red-500 font-black text-[11px] uppercase tracking-[0.3em] rounded-[28px] flex items-center justify-center gap-3 border border-red-500/20 active:scale-95 mb-10 hover:bg-red-500/20">

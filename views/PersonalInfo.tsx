@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../Providers';
+import { useToast } from '../components/Toast';
 
 const COUNTRY_CODES = [
   { code: '+252', label: 'Somalia', flag: '🇸🇴' },
@@ -25,6 +26,7 @@ const VEHICLE_TYPES = [
 const PersonalInfo: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile, role } = useAuth();
+  const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedCountryCode, setSelectedCountryCode] = useState('+252');
   const [isSaving, setIsSaving] = useState(false);
@@ -125,24 +127,27 @@ const PersonalInfo: React.FC = () => {
       };
 
       if (role === 'VENDOR') {
-        updateData.businessName = formData.businessName;
-        updateData.lat = Number(formData.lat);
-        updateData.lng = Number(formData.lng);
+        updateData.businessName = formData.businessName || '';
+        // Ensure numbers are valid, fallback to existing or default
+        const lat = Number(formData.lat);
+        const lng = Number(formData.lng);
+        updateData.lat = isNaN(lat) ? 9.5624 : lat;
+        updateData.lng = isNaN(lng) ? 44.0770 : lng;
       }
       if (role === 'RIDER') {
-        updateData.vehicleType = formData.vehicleType;
-        updateData.plateNumber = formData.plateNumber;
+        updateData.vehicleType = formData.vehicleType || 'Toyota Vitz';
+        updateData.plateNumber = formData.plateNumber || '';
       }
       if (role === 'CLIENT' || role === 'ADMIN') {
-        updateData.operationalHub = formData.operationalHub;
+        updateData.operationalHub = formData.operationalHub || '';
       }
 
       await updateDoc(userRef, updateData);
-      alert('Identity synchronized successfully across the mesh.');
+      showToast('Identity synchronized successfully across the mesh.', 'SUCCESS');
       navigate(-1);
     } catch (err: any) {
       console.error("Update Error:", err);
-      setError("Sync failed. Check connection.");
+      showToast("Sync failed. Check connection.", 'ERROR');
     } finally {
       setIsSaving(false);
     }
@@ -261,7 +266,10 @@ const PersonalInfo: React.FC = () => {
                     <input
                       type="number" step="any"
                       value={formData.lat}
-                      onChange={e => setFormData({ ...formData, lat: parseFloat(e.target.value) })}
+                      onChange={e => {
+                        const val = parseFloat(e.target.value);
+                        setFormData({ ...formData, lat: isNaN(val) ? 0 : val });
+                      }}
                       className="w-full h-14 bg-gray-50/50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 rounded-2xl px-5 text-sm font-bold text-secondary dark:text-white focus:border-primary transition-all"
                     />
                   </div>
@@ -270,7 +278,10 @@ const PersonalInfo: React.FC = () => {
                     <input
                       type="number" step="any"
                       value={formData.lng}
-                      onChange={e => setFormData({ ...formData, lng: parseFloat(e.target.value) })}
+                      onChange={e => {
+                        const val = parseFloat(e.target.value);
+                        setFormData({ ...formData, lng: isNaN(val) ? 0 : val });
+                      }}
                       className="w-full h-14 bg-gray-50/50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 rounded-2xl px-5 text-sm font-bold text-secondary dark:text-white focus:border-primary transition-all"
                     />
                   </div>

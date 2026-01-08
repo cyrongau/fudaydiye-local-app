@@ -14,26 +14,40 @@ const AdminAbandonmentReport: React.FC = () => {
    const [loading, setLoading] = useState(true);
    const [isGenerating, setIsGenerating] = useState<string | null>(null);
    const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+   const [communicationChannel, setCommunicationChannel] = useState<'EMAIL' | 'SMS' | 'WHATSAPP'>('EMAIL');
+   const [useTemplate, setUseTemplate] = useState(false);
+   const [selectedTemplate, setSelectedTemplate] = useState('abandoned_cart_recovery');
+
+   const WHATSAPP_TEMPLATES = [
+      { id: 'abandoned_cart_recovery', name: 'Standard Recovery (Default)' },
+      { id: 'cart_reminder_discount', name: 'Reminder + 5% Discount' },
+      { id: 'urgent_stock_alert', name: 'Urgent Stock Alert' }
+   ];
 
    useEffect(() => {
       let unsub = () => { };
       try {
-         // Show carts not updated in the last hour
-         const oneHourAgo = new Date(Date.now() - 3600000);
+         // Show carts not updated in the last 24 hours
+         const oneDayAgo = Date.now() - 86400000;
          const q = query(
             collection(db, "carts"),
-            where("status", "==", "ACTIVE"),
-            where("updatedAt", "<", Timestamp.fromDate(oneHourAgo)),
-            orderBy("updatedAt", "desc")
+            where("status", "==", "ACTIVE")
          );
 
          unsub = onSnapshot(q, (snap) => {
             const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as CartNode));
+
+            // Client-side filtering for > 24h and sorting
+            const abandoned = data.filter(c => {
+               const updatedTime = c.updatedAt?.seconds ? c.updatedAt.seconds * 1000 : 0;
+               return updatedTime < oneDayAgo;
+            }).sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
+
             // If vendor role, filter for items belonging to them
             if (role === 'VENDOR') {
-               setCarts(data.filter(c => c.items.some(i => i.vendorId === user?.uid)));
+               setCarts(abandoned.filter(c => c.items.some(i => i.vendorId === user?.uid)));
             } else {
-               setCarts(data);
+               setCarts(abandoned);
             }
             setLoading(false);
          }, (err) => {
@@ -51,17 +65,48 @@ const AdminAbandonmentReport: React.FC = () => {
    const generateRecoveryPrompt = async (cart: CartNode) => {
       setIsGenerating(cart.id);
       try {
-         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+         const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+         const ai = new GoogleGenAI({ apiKey });
          const itemNames = cart.items.map(i => i.name).join(', ');
          const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Generate a persuasive recovery message for a customer who abandoned a cart with: ${itemNames}. 
-        Offer a 5% discount code 'FUDAYDIYE_BACK'. Keep it friendly and concise for WhatsApp/SMS. Mention fast delivery in Hargeisa.`,
+            model: 'gemini-1.5-flash',
+            contents: [{
+               role: 'user', parts: [{
+                  text: `Generate a persuasive recovery message for a customer who abandoned a cart with: ${itemNames}. 
+         Offer a 5% discount code 'FUDAYDIYE_BACK'. Keep it friendly and concise for WhatsApp/SMS. Mention fast delivery in Hargeisa.` }]
+            }],
          });
          setRecoveryMessage(response.text || '');
       } catch (err) {
          console.error(err);
          setRecoveryMessage("Haye! We noticed items in your Fudaydiye cart. Complete your order now and get 5% off with code FUDAYDIYE_BACK!");
+      } finally {
+         setIsGenerating(null);
+      }
+   };
+
+   const generateStrategy = async () => {
+      setIsGenerating('STRATEGY');
+      try {
+         const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+         const ai = new GoogleGenAI({ apiKey });
+         // Aggregate data for context
+         const totalLost = carts.reduce((acc, c) => acc + c.totalValue, 0);
+         const topItems = carts.flatMap(c => c.items).map(i => i.name).slice(0, 10).join(', ');
+
+         const response = await ai.models.generateContent({
+            model: 'gemini-1.5-flash',
+            contents: [{
+               role: 'user', parts: [{
+                  text: `Analyze this abandoned cart data: Total Potential Revenue Lost: $${totalLost}. Common abandoned items: ${topItems}.
+               Generate a strategic recommendation for the Platform Admin to suggest to Vendors. 
+               Focus on: 1. Promoting specific categories via Homepage Cards. 2. Running a Flash Deal. 3. Facebook Ad themes.
+               Keep it concise, actionable, and professional.` }]
+            }],
+         });
+         setRecoveryMessage(response.text || '');
+      } catch (err) {
+         setRecoveryMessage("Strategy Node Error: Suggest reviewing pricing competitiveness and offering free delivery thresholds.");
       } finally {
          setIsGenerating(null);
       }
@@ -135,27 +180,88 @@ const AdminAbandonmentReport: React.FC = () => {
             <div className="lg:col-span-4 space-y-6">
                <section className="bg-primary text-secondary p-8 rounded-[48px] shadow-2xl relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-20"><span className="material-symbols-outlined text-4xl">campaign</span></div>
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] mb-4">Recovery Protocol</h3>
-                  {recoveryMessage ? (
-                     <div className="space-y-6 animate-in zoom-in duration-300">
-                        <div className="bg-white/90 p-5 rounded-3xl border border-secondary/10 shadow-inner">
-                           <p className="text-xs font-medium leading-relaxed italic">"{recoveryMessage}"</p>
+                  <div className="flex justify-between items-center mb-4">
+                     <h3 className="text-[10px] font-black uppercase tracking-[0.3em]">{role === 'ADMIN' ? 'Strategic Intelligence' : 'Recovery Protocol'}</h3>
+                     {role === 'VENDOR' && (
+                        <div className="flex gap-2">
+                           {communicationChannel === 'WHATSAPP' && (
+                              <button
+                                 onClick={() => setUseTemplate(!useTemplate)}
+                                 className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${useTemplate ? 'bg-green-500 text-white shadow-lg' : 'bg-secondary/10 text-secondary'}`}
+                              >
+                                 Template Mode
+                              </button>
+                           )}
+                           <select
+                              value={communicationChannel}
+                              onChange={(e) => setCommunicationChannel(e.target.value as any)}
+                              className="bg-secondary/20 text-secondary border-none rounded-lg text-[9px] font-black uppercase py-1 px-2 focus:ring-0"
+                           >
+                              <option value="EMAIL">Email</option>
+                              <option value="SMS">SMS</option>
+                              <option value="WHATSAPP">WhatsApp</option>
+                           </select>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                           <button className="h-12 bg-secondary text-primary rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg">
-                              <span className="material-symbols-outlined text-sm">mail</span> Email
-                           </button>
-                           <button className="h-12 bg-green-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg">
-                              <span className="material-symbols-outlined text-sm">chat</span> WhatsApp
-                           </button>
+                     )}
+                  </div>
+                  {(useTemplate && communicationChannel === 'WHATSAPP') ? (
+                     <div className="bg-white/90 p-6 rounded-3xl border border-green-500/20 shadow-inner space-y-4 animate-in fade-in zoom-in duration-300">
+                        <div className="flex items-center gap-3 mb-2">
+                           <span className="material-symbols-outlined text-green-600">whatsapp</span>
+                           <h4 className="text-xs font-black uppercase text-secondary">Select Business Template</h4>
                         </div>
-                        <button onClick={() => setRecoveryMessage(null)} className="w-full text-center text-[9px] font-black uppercase tracking-widest opacity-60">Reset AI Node</button>
+                        <select
+                           value={selectedTemplate}
+                           onChange={(e) => setSelectedTemplate(e.target.value)}
+                           className="w-full bg-green-50 border-none rounded-xl px-4 py-3 text-xs font-bold text-secondary focus:ring-green-500"
+                        >
+                           {WHATSAPP_TEMPLATES.map(t => (
+                              <option key={t.id} value={t.id}>{t.name}</option>
+                           ))}
+                        </select>
+                        <p className="text-[9px] text-gray-400 font-medium leading-relaxed">
+                           Template: <span className="font-mono text-secondary">{selectedTemplate}</span>
+                           <br />Warning: Templates must be pre-approved in Meta Business Manager.
+                        </p>
+                        <button className="w-full h-12 bg-green-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg hover:bg-green-600 transition-colors">
+                           <span className="material-symbols-outlined text-sm">send</span> Send Template
+                        </button>
                      </div>
                   ) : (
-                     <div className="py-10 text-center opacity-40">
-                        <span className="material-symbols-outlined text-4xl mb-4">auto_awesome</span>
-                        <p className="text-[10px] font-black uppercase tracking-widest">Select a cart node to generate intelligence-led recovery scripts.</p>
-                     </div>
+                     recoveryMessage ? (
+                        <div className="space-y-6 animate-in zoom-in duration-300">
+                           <div className="bg-white/90 p-5 rounded-3xl border border-secondary/10 shadow-inner">
+                              <p className="text-xs font-medium leading-relaxed italic">"{recoveryMessage}"</p>
+                           </div>
+                           {role !== 'ADMIN' && (
+                              <button className="w-full h-12 bg-secondary text-primary rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg hover:bg-white transition-colors">
+                                 <span className="material-symbols-outlined text-sm">
+                                    {communicationChannel === 'EMAIL' ? 'mail' : communicationChannel === 'SMS' ? 'textsms' : 'chat'}
+                                 </span>
+                                 Send {communicationChannel}
+                              </button>
+                           )}
+                           <button onClick={() => setRecoveryMessage(null)} className="w-full text-center text-[9px] font-black uppercase tracking-widest opacity-60">Reset AI Node</button>
+                        </div>
+                     ) : (
+                        <div className="py-10 text-center opacity-40">
+                           <span className="material-symbols-outlined text-4xl mb-4">{role === 'ADMIN' ? 'lightbulb' : 'auto_awesome'}</span>
+                           <p className="text-[10px] font-black uppercase tracking-widest">
+                              {role === 'ADMIN'
+                                 ? 'Generate high-level strategies to reduce platform-wide abandonment.'
+                                 : 'Select a cart node to generate intelligence-led recovery scripts.'}
+                           </p>
+                           {role === 'ADMIN' && (
+                              <button
+                                 onClick={generateStrategy}
+                                 disabled={!!isGenerating}
+                                 className="mt-6 h-12 w-full bg-white text-secondary rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                              >
+                                 {isGenerating === 'STRATEGY' ? 'Analyzing...' : 'Generate Insights'}
+                              </button>
+                           )}
+                        </div>
+                     )
                   )}
                </section>
 

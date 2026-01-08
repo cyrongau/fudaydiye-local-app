@@ -49,7 +49,7 @@ const RiderNavigationView: React.FC = () => {
   const [lat, setLat] = useState(9.5624);
   const [lng, setLng] = useState(44.0770);
   const [mapLoaded, setMapLoaded] = useState(false);
-  
+
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMap = useRef<any>(null);
   const riderMarker = useRef<any>(null);
@@ -57,10 +57,9 @@ const RiderNavigationView: React.FC = () => {
   // Added effect to load map script
   useEffect(() => {
     const loadMapScript = async () => {
-      const configSnap = await getDoc(doc(db, "system_config", "global"));
-      const apiKey = configSnap.data()?.integrations?.maps?.apiKey;
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
       if (!apiKey) {
-        setMapLoaded(true); // Fallback to placeholder if key missing
+        setMapLoaded(true); // Fallback
         return;
       }
       if ((window as any).google) { setMapLoaded(true); return; }
@@ -83,7 +82,7 @@ const RiderNavigationView: React.FC = () => {
         styles: landmarkTacticalStyles,
         mapTypeId: 'roadmap'
       });
-      
+
       // Initialize Rider Marker
       riderMarker.current = new google.maps.Marker({
         position: { lat, lng },
@@ -111,22 +110,133 @@ const RiderNavigationView: React.FC = () => {
     return () => unsub();
   }, [id]);
 
-  // Added movement simulation
-  const handleSimulateMovement = () => {
-    const newLat = lat + (Math.random() - 0.5) * 0.001;
-    const newLng = lng + (Math.random() - 0.5) * 0.001;
-    setLat(newLat);
-    setLng(newLng);
-    
-    if (riderMarker.current) {
-      riderMarker.current.setPosition({ lat: newLat, lng: newLng });
-      googleMap.current.panTo({ lat: newLat, lng: newLng });
+  // Refs for markers to prevent recreation
+  const vendorMarkerRef = useRef<any>(null);
+  const customerMarkerRef = useRef<any>(null);
+  const lastUpdateRef = useRef<number>(0);
+
+  // Sync Real Location with Throttling
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setLat(latitude);
+        setLng(longitude);
+
+        if (riderMarker.current) {
+          riderMarker.current.setPosition({ lat: latitude, lng: longitude });
+          googleMap.current?.panTo({ lat: latitude, lng: longitude });
+        }
+
+        // Throttle DB updates to every 10 seconds
+        const now = Date.now();
+        if (id && now - lastUpdateRef.current > 10000) {
+          lastUpdateRef.current = now;
+          try {
+            updateDoc(doc(db, "orders", id), {
+              currentLocation: { lat: latitude, lng: longitude }
+            }).catch(e => console.error("Loc update failed", e));
+          } catch (err) {
+            console.error("Loc update error", err);
+          }
+        }
+      },
+      (err) => console.error("GPS Error", err),
+      { enableHighAccuracy: true }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [id]);
+
+  // Handle Markers (Vendor/Customer) - Optimized
+  useEffect(() => {
+    if (!mapLoaded || !googleMap.current || !order) return;
+
+    // Vendor Marker
+    const vendorLoc = order.vendorLocation || { lat: 9.5620, lng: 44.0775 };
+    if (!vendorMarkerRef.current) {
+      vendorMarkerRef.current = new google.maps.Marker({
+        position: vendorLoc,
+        map: googleMap.current,
+        icon: {
+          url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+          scaledSize: new google.maps.Size(40, 40)
+        },
+        title: order.vendorName
+      });
+    } else {
+      vendorMarkerRef.current.setPosition(vendorLoc);
     }
 
-    if (id) {
-        updateDoc(doc(db, "orders", id), {
-            currentLocation: { lat: newLat, lng: newLng }
+    // Customer Marker
+    if (leg === 'delivery') {
+      const customerLoc = { lat: 9.5630, lng: 44.0790 };
+      if (!customerMarkerRef.current) {
+        customerMarkerRef.current = new google.maps.Marker({
+          position: customerLoc,
+          map: googleMap.current,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: "#E93A3A",
+            fillOpacity: 1,
+            strokeWeight: 2,
+            strokeColor: "#FFF"
+          }
         });
+      } else {
+        customerMarkerRef.current.setPosition(customerLoc);
+      }
+    }
+  }, [mapLoaded, order, leg]);
+
+  const [directions, setDirections] = useState<any>(null);
+
+  // Calculate Route
+  useEffect(() => {
+    if (!mapLoaded || !googleMap.current || !order || !lat || !lng) return;
+
+    const directionsService = new google.maps.DirectionsService();
+    // Destination: Vendor Loc if pickup, Customer Address if delivery (geocoding needed in real app, using mock/latlng if avail)
+    // For now assuming order has lat/lng or we rely on text search (less reliable but works for mock)
+
+    const dest = leg === 'pickup'
+      ? (order.vendorLocation || { lat: 9.5620, lng: 44.0775 })
+      : (order.currentLocation || { lat: 9.5630, lng: 44.0790 }); // Fallback to avoid crash
+
+    // In production, use Place ID or exact coords
+    directionsService.route({
+      origin: { lat, lng },
+      destination: dest,
+      travelMode: google.maps.TravelMode.DRIVING
+    }, (result: any, status: any) => {
+      if (status === google.maps.DirectionsStatus.OK) {
+        setDirections(result);
+
+        // Render Route
+        const directionsRenderer = new google.maps.DirectionsRenderer({
+          map: googleMap.current,
+          directions: result,
+          suppressMarkers: true, // We have our own custom markers
+          polylineOptions: {
+            strokeColor: "#06DC7F",
+            strokeWeight: 5,
+            strokeOpacity: 0.8
+          }
+        });
+      }
+    });
+
+  }, [mapLoaded, order, leg, lat, lng]); // Re-calc on significant location change? Maybe throttle this in real app.
+
+  // NOTE: "Open System Maps" is now removed in favor of in-app view.
+  // We keep the button but it just re-centers or provides info.
+  const handleRecenter = () => {
+    if (googleMap.current) {
+      googleMap.current.panTo({ lat, lng });
+      googleMap.current.setZoom(17);
     }
   };
 
@@ -153,39 +263,37 @@ const RiderNavigationView: React.FC = () => {
       </div>
 
       <div className="absolute bottom-8 left-6 right-6 z-30 bg-white dark:bg-surface-dark rounded-[40px] shadow-2xl border border-gray-100 dark:border-white/5 p-6 flex flex-col gap-6">
-         <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-               <div className="size-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner border border-primary/20">
-                  <span className="material-symbols-outlined text-3xl font-black">near_me</span>
-               </div>
-               <div>
-                  <h4 className="text-base font-black text-secondary dark:text-white uppercase tracking-tighter mb-1">
-                    {leg === 'pickup' ? order?.vendorName : order?.shippingAddress?.split(',')[0]}
-                  </h4>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                    {leg === 'pickup' ? 'Merchant Terminal Node' : 'Customer Drop-off Node'}
-                  </p>
-               </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="size-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner border border-primary/20">
+              <span className="material-symbols-outlined text-3xl font-black">near_me</span>
             </div>
-            <button 
-              onClick={handleSimulateMovement}
-              className="size-12 rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-primary shadow-sm active:scale-90"
-            >
-               <span className="material-symbols-outlined">sync</span>
-            </button>
-         </div>
+            <div>
+              <h4 className="text-base font-black text-secondary dark:text-white uppercase tracking-tighter mb-1">
+                {leg === 'pickup' ? order?.vendorName : order?.shippingAddress?.split(',')[0]}
+              </h4>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                {leg === 'pickup' ? 'Merchant Terminal Node' : 'Customer Drop-off Node'}
+              </p>
+            </div>
+          </div>
+        </div>
 
-         <div className="flex gap-3">
-            <button className="flex-[2] h-14 bg-primary text-secondary font-black text-[11px] uppercase tracking-[0.3em] rounded-2xl shadow-lg active:scale-95 transition-all">
-               Open System Maps
-            </button>
-            <button 
-              onClick={() => navigate(leg === 'pickup' ? `/rider/pickup/${id}` : `/rider/confirm/${id}`)}
-              className="flex-1 h-14 bg-secondary text-white font-black text-[11px] uppercase tracking-widest rounded-2xl shadow-lg active:scale-95 transition-all"
-            >
-               Arrived
-            </button>
-         </div>
+        <div className="flex gap-3">
+          <button
+            onClick={handleRecenter}
+            className="flex-[2] h-14 bg-primary text-secondary font-black text-[11px] uppercase tracking-[0.3em] rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined">navigation</span>
+            Recenter
+          </button>
+          <button
+            onClick={() => navigate(leg === 'pickup' ? `/rider/pickup/${id}` : `/rider/confirm/${id}`)}
+            className="flex-1 h-14 bg-secondary text-white font-black text-[11px] uppercase tracking-widest rounded-2xl shadow-lg active:scale-95 transition-all"
+          >
+            Arrived
+          </button>
+        </div>
       </div>
     </div>
   );

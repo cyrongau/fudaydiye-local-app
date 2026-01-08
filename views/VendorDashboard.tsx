@@ -1,16 +1,27 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DocumentModal from '../components/DocumentModal';
 import { GoogleGenAI } from "@google/genai";
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, doc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../Providers';
+import AdminAbandonmentReport from './AdminAbandonmentReport';
+import HeaderNotification from '../components/HeaderNotification';
 
 interface Message {
    role: 'user' | 'ai';
    text: string;
    type?: 'text' | 'sales_summary' | 'product_action';
+}
+
+interface Notification {
+   id: string;
+   title: string;
+   message: string;
+   type: 'ORDER' | 'SYSTEM' | 'ALERT';
+   read: boolean;
+   link?: string;
+   createdAt: any;
 }
 
 const VendorDashboard: React.FC = () => {
@@ -24,17 +35,21 @@ const VendorDashboard: React.FC = () => {
    });
    const [recentOrders, setRecentOrders] = useState<any[]>([]);
    const [topProducts, setTopProducts] = useState<any[]>([]);
+   const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'LEADS'>('DASHBOARD');
 
    useEffect(() => {
       if (!user?.uid) return;
 
-      // 1. Fetch Orders (Sales & Activity)
-      const qOrders = query(collection(db, "orders"), where("vendorId", "==", user.uid), orderBy("createdAt", "desc"));
+      // 1. Fetch Orders (Sales & Activity) - Simplified Query
+      const qOrders = query(collection(db, "orders"), where("vendorId", "==", user.uid));
       const unsubOrders = onSnapshot(qOrders, (snap) => {
          let totalSales = 0;
          let active = 0;
          let pending = 0;
          const orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+
+         // Client-side Sort
+         orders.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
          orders.forEach(order => {
             const orderTotal = Number(order.total) || Number(order.totalAmount) || 0;
@@ -86,10 +101,8 @@ const VendorDashboard: React.FC = () => {
                <span className="text-lg font-black text-secondary dark:text-white">Fudaydiye</span>
             </div>
             <div className="flex items-center gap-3">
-               <button className="relative text-gray-400">
-                  <span className="material-symbols-outlined">notifications</span>
-                  <span className="absolute top-0 right-0 size-2 bg-red-500 rounded-full border border-white"></span>
-               </button>
+               <HeaderNotification />
+
                <div className="size-8 rounded-full bg-orange-300 overflow-hidden border border-orange-100">
                   <img src={profile?.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200"} className="w-full h-full object-cover" alt="Profile" />
                </div>
@@ -155,36 +168,45 @@ const VendorDashboard: React.FC = () => {
                   {profile?.canStream && <QuickAction icon="campaign" label="Promote" color="bg-purple-100 text-purple-600" onClick={() => navigate('/vendor/live-setup')} />}
                   <QuickAction icon="bar_chart" label="Analytics" color="bg-blue-100 text-blue-600" onClick={() => navigate('/vendor/analytics')} />
                   <QuickAction icon="reviews" label="Reviews" color="bg-yellow-100 text-yellow-600" onClick={() => navigate('/vendor/reviews')} />
+                  <QuickAction icon="unsubscribe" label="Leads" color="bg-red-100 text-red-600" onClick={() => setActiveTab('LEADS')} />
                </div>
             </div>
 
-            {/* Recent Orders List */}
-            <div>
-               <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-black text-secondary dark:text-white">Recent Orders</h3>
-                  <button onClick={() => navigate('/vendor/orders')} className="text-[11px] font-black text-[#06DC7F] uppercase tracking-wider">View All</button>
-               </div>
-               <div className="space-y-3">
-                  {recentOrders.length === 0 && <div className="bg-white dark:bg-surface-dark rounded-2xl p-8 text-center text-gray-400 text-xs">No orders yet today.</div>}
-                  {recentOrders.map((order, i) => (
-                     <div key={i} className="bg-white dark:bg-surface-dark p-3 rounded-[20px] shadow-sm border border-gray-100 dark:border-white/5 flex gap-4 active:scale-[0.98] transition-all">
-                        <div className="size-14 rounded-xl bg-gray-100 shrink-0 overflow-hidden">
-                           <img src={order.items?.[0]?.image || "https://placehold.co/100"} className="size-full object-cover" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                           <div className="flex justify-between items-start mb-1">
-                              <h4 className="text-sm font-bold text-secondary dark:text-white truncate pr-2">{order.items?.[0]?.name}</h4>
-                              <span className="text-sm font-black text-[#06DC7F] shrink-0">{formatCurrency(Number(order.total) || Number(order.totalAmount) || 0)}</span>
-                           </div>
-                           <p className="text-[10px] text-gray-400 mb-2">{order.items?.length || 1} items • {new Date(order.createdAt?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                           <div className="flex items-center gap-2">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide ${order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{order.status}</span>
-                           </div>
-                        </div>
+            {activeTab === 'LEADS' ? (
+               <AdminAbandonmentReport />
+            ) : (
+               <>
+                  {/* Recent Orders List */}
+
+                  {/* Recent Orders List */}
+                  <div>
+                     <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-black text-secondary dark:text-white">Recent Orders</h3>
+                        <button onClick={() => navigate('/vendor/orders')} className="text-[11px] font-black text-[#06DC7F] uppercase tracking-wider">View All</button>
                      </div>
-                  ))}
-               </div>
-            </div>
+                     <div className="space-y-3">
+                        {recentOrders.length === 0 && <div className="bg-white dark:bg-surface-dark rounded-2xl p-8 text-center text-gray-400 text-xs">No orders yet today.</div>}
+                        {recentOrders.map((order, i) => (
+                           <div key={i} className="bg-white dark:bg-surface-dark p-3 rounded-[20px] shadow-sm border border-gray-100 dark:border-white/5 flex gap-4 active:scale-[0.98] transition-all">
+                              <div className="size-14 rounded-xl bg-gray-100 shrink-0 overflow-hidden">
+                                 <img src={order.items?.[0]?.image || "https://placehold.co/100"} className="size-full object-cover" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                 <div className="flex justify-between items-start mb-1">
+                                    <h4 className="text-sm font-bold text-secondary dark:text-white truncate pr-2">{order.items?.[0]?.name}</h4>
+                                    <span className="text-sm font-black text-[#06DC7F] shrink-0">{formatCurrency(Number(order.total) || Number(order.totalAmount) || 0)}</span>
+                                 </div>
+                                 <p className="text-[10px] text-gray-400 mb-2">{order.items?.length || 1} items • {new Date(order.createdAt?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                 <div className="flex items-center gap-2">
+                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide ${order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{order.status}</span>
+                                 </div>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+               </>
+            )}
          </div>
 
          {/* FAB - Add Product */}

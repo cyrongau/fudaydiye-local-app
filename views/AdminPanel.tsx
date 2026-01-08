@@ -3,10 +3,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminMobileAds from './AdminMobileAds';
 import AdminLiveManager from './AdminLiveManager';
+import AdminAbandonmentReport from './AdminAbandonmentReport';
+import HeaderNotification from '../components/HeaderNotification';
 
 const AdminPanel: React.FC = () => {
    const navigate = useNavigate();
-   const [activeTab, setActiveTab] = useState<'VENDORS' | 'RIDERS' | 'MOBILE_ADS' | 'LIVE_OPS'>('VENDORS');
+   const [activeTab, setActiveTab] = useState<'VENDORS' | 'RIDERS' | 'MOBILE_ADS' | 'LIVE_OPS' | 'ABANDONMENT'>('VENDORS');
 
    const vendorList = [
       { id: 'V001', name: 'Somali Fashion', status: 'ACTIVE', products: 45, orders: 234, revenue: '$12,450', joined: 'Dec 2024' },
@@ -18,6 +20,7 @@ const AdminPanel: React.FC = () => {
       switch (activeTab) {
          case 'MOBILE_ADS': return <AdminMobileAds />;
          case 'LIVE_OPS': return <AdminLiveManager />;
+         case 'ABANDONMENT': return <AdminAbandonmentReport />;
          case 'RIDERS': return (
             <div className="text-center py-20 text-gray-400 uppercase font-black tracking-widest">Rider Management Module</div>
          );
@@ -76,9 +79,7 @@ const AdminPanel: React.FC = () => {
                      <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mt-1">Platform Management</p>
                   </div>
                </div>
-               <button className="size-9 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-gray-500">
-                  <span className="material-symbols-outlined text-[20px]">notifications</span>
-               </button>
+               <HeaderNotification />
             </div>
          </header>
 
@@ -92,6 +93,7 @@ const AdminPanel: React.FC = () => {
                <button onClick={() => setActiveTab('RIDERS')} className={`flex-1 min-w-[80px] py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'RIDERS' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500'}`}>Riders</button>
                <button onClick={() => setActiveTab('MOBILE_ADS')} className={`flex-1 min-w-[80px] py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'MOBILE_ADS' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500'}`}>Mob. Ads</button>
                <button onClick={() => setActiveTab('LIVE_OPS')} className={`flex-1 min-w-[80px] py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'LIVE_OPS' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500'}`}>Live Ops</button>
+               <button onClick={() => setActiveTab('ABANDONMENT')} className={`flex-1 min-w-[80px] py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'ABANDONMENT' ? 'bg-white text-secondary shadow-sm' : 'text-gray-500'}`}>Lost Leads</button>
             </div>
 
             {/* Content Area */}

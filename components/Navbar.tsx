@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useCart } from '../Providers';
 import UnifiedSearch from './UnifiedSearch';
+import HeaderNotification from './HeaderNotification';
 import logo from '../assets/logo.png';
 
 const categories = [
@@ -198,11 +199,9 @@ const Navbar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/customer/notifications')} className="text-secondary dark:text-white relative">
-            <span className="material-symbols-outlined text-[28px]">notifications</span>
-            {/* Mock Badge for now */}
-            <span className="absolute top-0 right-0 size-2.5 bg-red-500 rounded-full border-2 border-white dark:border-surface-dark"></span>
-          </button>
+          <div className="-mr-2">
+            <HeaderNotification />
+          </div>
           <button onClick={() => navigate('/customer/cart')} className="relative text-secondary dark:text-white">
             <span className="material-symbols-outlined text-[28px]">shopping_bag</span>
             {cartCount > 0 && <span className="absolute -top-1 -right-1 size-4 rounded-full bg-primary text-secondary text-[8px] font-black flex items-center justify-center border-2 border-white dark:border-surface-dark">{cartCount}</span>}

@@ -18,8 +18,11 @@ service cloud.firestore {
     // Read: Own profile OR if the user is a VENDOR OR if the requester is an ADMIN
     // Write: Own profile OR if the requester is an ADMIN (Fetched from DB)
     match /users/{userId} {
-      allow read: if (isSignedIn() && isOwner(userId)) || resource.data.role == 'VENDOR' || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
-      allow write: if isSignedIn() && (isOwner(userId) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN');
+      allow read: if (isSignedIn() && isOwner(userId)) 
+                  || resource.data.role == 'VENDOR' 
+                  || resource.data.parentVendorId == request.auth.uid // Allow Vendor to read their staff
+                  || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      allow write: if isSignedIn() && (isOwner(userId) || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' || (request.resource.data.parentVendorId == request.auth.uid)); // Allow Vendor to create staff
     }
 
     // 2. Products Collection
@@ -57,6 +60,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.token.role == 'ADMIN');
       allow create: if isSignedIn(); // Triggered by system or other users
       allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.token.role == 'ADMIN');
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.token.role == 'ADMIN');
     }
 
     // Carts: Public read/write (Temporary for Guest checkout)
@@ -75,6 +79,12 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    // 6.a Settings (Exchange Rates, etc)
+    match /settings/{document=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+
     // 7. CMS Content (Public Read, Admin Write)
     match /cms_content/{document=**} {
       allow read: if true;
@@ -91,6 +101,33 @@ service cloud.firestore {
     match /live_sessions/{sessionId}/messages/{msgId} {
       allow read: if true;
       allow create: if isSignedIn();
+    }
+
+    // 10. Vendor Stores
+    match /stores/{storeId} {
+      allow read: if true;
+      allow write: if isSignedIn() && resource == null ? request.resource.data.vendorId == request.auth.uid : resource.data.vendorId == request.auth.uid;
+    }
+
+    // 11. Financials (Transactions & Payouts)
+    match /transactions/{txId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false; // System only
+    }
+
+    match /payouts/{payoutId} {
+      allow read: if isSignedIn() && resource.data.vendorId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.vendorId == request.auth.uid;
+    }
+
+    // 12. Reviews
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn(); // Customers can review
+      allow update: if isSignedIn() && (
+        resource.data.vendorId == request.auth.uid || // Vendor can reply
+        resource.data.userId == request.auth.uid // Author can edit
+      );
     }
 
     // Default Deny

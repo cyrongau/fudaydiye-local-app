@@ -80,6 +80,7 @@ import GlobalScanView from './views/GlobalScanView';
 import VendorLiveCockpit from './views/VendorLiveCockpit';
 import ContactUs from './views/ContactUs';
 import ScrollToTop from './components/ScrollToTop';
+import { ToastProvider } from './components/Toast';
 
 import { UserRole, CartItem, UserProfile, CartNode } from './types';
 
@@ -159,12 +160,14 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <Providers>
-        <Router>
-          <ScrollToTop />
-          <Layout>
-            <AppRoutes />
-          </Layout>
-        </Router>
+        <ToastProvider>
+          <Router>
+            <ScrollToTop />
+            <Layout>
+              <AppRoutes />
+            </Layout>
+          </Router>
+        </ToastProvider>
       </Providers>
     </ErrorBoundary>
   );

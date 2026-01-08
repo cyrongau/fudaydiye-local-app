@@ -32,6 +32,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
     { icon: 'group', path: '/admin/users', label: 'Merchants' },
     { icon: 'two_wheeler', path: '/admin/riders', label: 'Riders' },
     { icon: 'article', path: '/admin/cms', label: 'CMS Terminal' },
+    { icon: 'shopping_cart_off', path: '/admin/abandonment', label: 'Lost Leads' },
     { icon: 'security', path: '/admin/audits', label: 'Security Log' },
   ];
 

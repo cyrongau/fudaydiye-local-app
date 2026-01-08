@@ -13,9 +13,11 @@ const WebCustomerHome: React.FC = () => {
    const navigate = useNavigate();
    const { addToCart } = useCart();
    const [products, setProducts] = useState<Product[]>([]);
+   const [flashDeals, setFlashDeals] = useState<Product[]>([]);
    const [heroSlides, setHeroSlides] = useState<CMSContent[]>([]);
    const [categories, setCategories] = useState<CategoryNode[]>([]);
    const [liveSessions, setLiveSessions] = useState<LiveSaleSession[]>([]);
+   const [scheduledSessions, setScheduledSessions] = useState<LiveSaleSession[]>([]);
    const [featuredLive, setFeaturedLive] = useState<LiveSaleSession | null>(null);
    const [loading, setLoading] = useState(true);
    const [activeHero, setActiveHero] = useState(0);
@@ -69,6 +71,14 @@ const WebCustomerHome: React.FC = () => {
          setLiveSessions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LiveSaleSession)));
       });
 
+      // Scheduled Sessions (for Banner) - Client side sort to avoid index
+      const unsubScheduled = onSnapshot(query(collection(db, "live_sessions"), where("status", "==", "SCHEDULED"), limit(10)), (snap) => {
+         const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LiveSaleSession));
+         // Sort by scheduledFor ascending
+         list.sort((a, b) => (a.scheduledFor?.seconds || 0) - (b.scheduledFor?.seconds || 0));
+         setScheduledSessions(list.slice(0, 1));
+      });
+
       // Products Feed - HARD FILTER for Suspended Vendors
       setLoading(true);
       // Note: Ideally, products should have a 'vendorStatus' field denormalized, 
@@ -88,7 +98,19 @@ const WebCustomerHome: React.FC = () => {
          setLoading(false);
       });
 
-      return () => { unsubCats(); unsubHero(); unsubAds(); unsubFeatured(); unsubLive(); unsubProd(); unsubPromos(); };
+      // Flash Deals (only explicitly marked ones)
+      const unsubFlash = onSnapshot(query(collection(db, "products"), where("isFlashDeal", "==", true), limit(12)), (snap) => {
+         // Sort by discount % descending locally
+         const deals = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+         deals.sort((a, b) => {
+            const discA = a.basePrice > 0 ? (1 - (a.salePrice || a.basePrice) / a.basePrice) : 0;
+            const discB = b.basePrice > 0 ? (1 - (b.salePrice || b.basePrice) / b.basePrice) : 0;
+            return discB - discA;
+         });
+         setFlashDeals(deals);
+      });
+
+      return () => { unsubCats(); unsubHero(); unsubAds(); unsubFeatured(); unsubLive(); unsubScheduled(); unsubProd(); unsubPromos(); unsubFlash(); };
    }, [activeTab]);
 
    useEffect(() => {
@@ -97,6 +119,35 @@ const WebCustomerHome: React.FC = () => {
          return () => clearInterval(timer);
       }
    }, [heroSlides]);
+
+   // Flash Deal Timer Logic
+   const [timeLeft, setTimeLeft] = useState("00:00:00");
+
+   useEffect(() => {
+      if (flashDeals.length === 0) return;
+
+      // Use the earliest end time from the deals, or default to midnight
+      const targetTime = flashDeals[0].flashSaleEndTime
+         ? new Date(flashDeals[0].flashSaleEndTime.seconds * 1000).getTime()
+         : new Date().setHours(24, 0, 0, 0);
+
+      const interval = setInterval(() => {
+         const now = new Date().getTime();
+         const distance = targetTime - now;
+
+         if (distance < 0) {
+            setTimeLeft("ENDED");
+            // Optionally remove ended deals here or rely on Firestore update
+         } else {
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            setTimeLeft(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+         }
+      }, 1000);
+
+      return () => clearInterval(interval);
+   }, [flashDeals]);
 
    return (
       <div className="flex flex-col animate-in fade-in duration-700 bg-background-light dark:bg-background-dark font-display w-full overflow-x-hidden">
@@ -136,36 +187,62 @@ const WebCustomerHome: React.FC = () => {
                )}
             </div>
 
-            {/* Mobile Optimized Hero (Eid Sale) */}
+            {/* Mobile Optimized Hero Section */}
             <div className="md:hidden px-4 pt-4 space-y-4">
-               {/* Main Banner */}
-               <div className="rounded-[24px] bg-[#0A4D46] p-6 text-white relative overflow-hidden shadow-lg h-[180px] flex flex-col justify-center">
-                  <div className="absolute right-[-20px] top-0 bottom-0 w-[140px] bg-[url('https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400')] bg-cover bg-center mask-image-gradient"></div>
-                  <div className="relative z-10 max-w-[65%]">
-                     <span className="bg-[#06DC7F] text-[#015754] text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider mb-2 inline-block">Eid Sale</span>
-                     <h2 className="text-2xl font-black leading-tight mb-1">Up to 50% Off</h2>
-                     <p className="text-[10px] opacity-80 mb-4">On Electronics & Fashion</p>
-                     <button onClick={() => navigate('/customer/explore')} className="bg-white text-[#015754] text-[10px] font-bold px-4 py-2 rounded-lg">Shop Now</button>
-                  </div>
-               </div>
-
-               {/* Live Banner Compact - Show ONLY if there is a FEATURED live session */}
+               {/* Priority 1: Featured Live Session (Live Now) */}
                {featuredLive && (
-                  <div onClick={() => navigate(`/customer/live/${featuredLive.id}`)} className="rounded-[20px] bg-[#015754] p-4 flex items-center justify-between text-white shadow-md cursor-pointer border border-white/10 relative overflow-hidden">
-                     <div className="absolute inset-0 bg-gradient-to-r from-[#015754] to-transparent z-0"></div>
-                     {featuredLive.featuredProductImg && <img src={featuredLive.featuredProductImg} className="absolute right-0 top-0 bottom-0 w-24 object-cover opacity-20 mask-image-linear-to-l" alt="" />}
-
-                     <div className="flex flex-col relative z-10 max-w-[70%]">
-                        <div className="flex items-center gap-2 mb-1">
-                           <span className="size-2 bg-[#06DC7F] rounded-full animate-pulse shadow-[0_0_8px_#06DC7F]"></span>
-                           <span className="text-[10px] font-bold text-[#06DC7F] uppercase tracking-wider">Live Now</span>
-                        </div>
-                        <h3 className="text-lg font-black leading-none truncate">{featuredLive.title}</h3>
-                        <p className="text-[9px] opacity-70 truncate">{featuredLive.vendorName} • {featuredLive.viewerCount || 0} Watching</p>
+                  <div onClick={() => navigate(`/customer/live/${featuredLive.id}`)} className="rounded-[24px] bg-[#015754] p-5 flex flex-col relative overflow-hidden text-white shadow-2xl cursor-pointer border border-white/10">
+                     <div className="absolute inset-0">
+                        <img src={featuredLive.featuredProductImg || featuredLive.hostAvatar} className="w-full h-full object-cover opacity-40 mix-blend-overlay" alt="" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#015754] via-[#015754]/80 to-transparent"></div>
                      </div>
-                     <button className="bg-[#06DC7F] text-[#015754] px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 z-10 shadow-lg">
-                        Join <span className="material-symbols-outlined text-[12px]">arrow_forward</span>
-                     </button>
+
+                     <div className="relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                           <div className="flex items-center gap-2 bg-[#06DC7F]/20 backdrop-blur-md px-3 py-1 rounded-full border border-[#06DC7F]/30">
+                              <span className="size-2 bg-[#06DC7F] rounded-full animate-pulse shadow-[0_0_8px_#06DC7F]"></span>
+                              <span className="text-[10px] font-black text-[#06DC7F] uppercase tracking-widest">Live Now</span>
+                           </div>
+                           <span className="text-[10px] font-bold bg-black/30 px-2 py-1 rounded-lg backdrop-blur-md">{featuredLive.viewerCount || 0} watching</span>
+                        </div>
+
+                        <h2 className="text-2xl font-black leading-none uppercase mb-2 line-clamp-2">{featuredLive.title}</h2>
+                        <p className="text-xs text-white/70 font-bold uppercase tracking-wider mb-6">with {featuredLive.vendorName}</p>
+
+                        <button className="w-full h-11 bg-[#06DC7F] text-[#015754] rounded-xl text-[11px] font-black uppercase tracking-[0.1em] flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] transition-transform">
+                           Join Stream <span className="material-symbols-outlined text-[16px]">videocam</span>
+                        </button>
+                     </div>
+                  </div>
+               )}
+
+               {/* Priority 2: Scheduled Live Session (If no Live Now) */}
+               {!featuredLive && scheduledSessions.length > 0 && (
+                  <div className="rounded-[24px] bg-[#2A0A18] p-5 relative overflow-hidden text-white shadow-xl">
+                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                     <div className="relative z-10">
+                        <span className="bg-white/10 text-white border border-white/10 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest mb-3 inline-block">Upcoming Event</span>
+                        <h2 className="text-xl font-black leading-tight mb-1">{scheduledSessions[0].title}</h2>
+                        <p className="text-[10px] opacity-70 uppercase tracking-widest mb-4">
+                           {new Date(scheduledSessions[0].scheduledFor?.seconds * 1000).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} • {scheduledSessions[0].vendorName}
+                        </p>
+                        <button className="bg-white text-[#2A0A18] text-[10px] font-black px-5 py-2.5 rounded-xl uppercase tracking-wider w-full flex items-center justify-center gap-2">
+                           <span className="material-symbols-outlined text-[14px]">notifications_active</span> Notify Me
+                        </button>
+                     </div>
+                  </div>
+               )}
+
+               {/* Priority 3: Hero CMS Slider (Fallback if no Live/Scheduled) */}
+               {!featuredLive && scheduledSessions.length === 0 && heroSlides.length > 0 && (
+                  <div className="rounded-[24px] bg-secondary p-6 text-white relative overflow-hidden shadow-lg h-[200px] flex flex-col justify-center" onClick={() => navigate(heroSlides[0].ctaLink || '/customer/explore')}>
+                     <img src={heroSlides[0].featuredImage} className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay" alt="" />
+                     <div className="absolute inset-0 bg-gradient-to-r from-secondary via-secondary/80 to-transparent"></div>
+                     <div className="relative z-10 max-w-[80%]">
+                        <span className="bg-primary text-secondary text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider mb-2 inline-block shadow-lg">{heroSlides[0].category}</span>
+                        <h2 className="text-2xl font-black leading-none mb-2 text-white uppercase tracking-tight">{heroSlides[0].title}</h2>
+                        <button className="bg-white text-secondary text-[10px] font-black px-5 py-2 rounded-xl uppercase tracking-widest mt-2 hover:bg-primary transition-colors">{heroSlides[0].ctaText || 'Explore'}</button>
+                     </div>
                   </div>
                )}
             </div>
@@ -196,34 +273,39 @@ const WebCustomerHome: React.FC = () => {
          {/* 2. Category Rail (Scroll Mobile / Grid Desktop) */}
          < CategoryRail categories={categories} />
 
-         {/* 3. Flash Deals (Horizontal Scroll) */}
-         < section className="py-2 px-4 mb-4" >
-            <div className="flex items-center justify-between mb-3">
-               <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-black text-secondary dark:text-white">Flash Deals</h3>
-                  <span className="bg-[#FFEAEA] text-red-500 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">timer</span> 02:15:48</span>
-               </div>
-               <button className="text-[10px] font-bold text-[#06DC7F]">See All</button>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
-               {products.slice(0, 12).map(prod => (
-                  <div key={prod.id} onClick={() => navigate(`/customer/product/${prod.id}`)} className="bg-white dark:bg-white/5 rounded-xl p-2 shadow-sm border border-gray-100 dark:border-white/5 relative group cursor-pointer">
-                     <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded z-10">-45%</span>
-                     <div className="aspect-square bg-gray-50 dark:bg-black/20 rounded-lg mb-2 overflow-hidden relative">
-                        <img src={prod.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                     </div>
-                     <h4 className="text-[11px] font-bold text-gray-700 dark:text-gray-200 truncate mb-1">{prod.name}</h4>
-                     <div className="flex items-center gap-2">
-                        <span className="text-sm font-black text-[#06DC7F]">${Math.round(prod.basePrice * 0.55)}</span>
-                        <span className="text-[10px] text-gray-400 line-through">${prod.basePrice}</span>
-                     </div>
+         {/* 3. Flash Deals (Horizontal Scroll) - Controlled by 'isFlashDeal' flag */}
+         {flashDeals.length > 0 && (
+            < section className="py-6 px-6 mb-8 max-w-7xl mx-auto" >
+               <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                     <h3 className="text-lg font-black text-secondary dark:text-white">Flash Deals</h3>
+                     <span className="bg-[#FFEAEA] text-red-500 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">timer</span> {timeLeft}</span>
                   </div>
-               ))}
-            </div>
-         </section >
+                  <button className="text-[10px] font-bold text-[#06DC7F]">See All</button>
+               </div>
+               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
+                  {flashDeals.map(prod => {
+                     const discount = prod.basePrice > 0 ? Math.round((1 - (prod.salePrice || prod.basePrice) / prod.basePrice) * 100) : 0;
+                     return (
+                        <div key={prod.id} onClick={() => navigate(`/customer/product/${prod.id}`)} className="bg-white dark:bg-white/5 rounded-xl p-2 shadow-sm border border-gray-100 dark:border-white/5 relative group cursor-pointer">
+                           {discount > 0 && <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded z-10">-{discount}%</span>}
+                           <div className="aspect-square bg-gray-50 dark:bg-black/20 rounded-lg mb-2 overflow-hidden relative">
+                              <img src={prod.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                           </div>
+                           <h4 className="text-[11px] font-bold text-gray-700 dark:text-gray-200 truncate mb-1">{prod.name}</h4>
+                           <div className="flex items-center gap-2">
+                              <span className="text-sm font-black text-[#06DC7F]">${prod.salePrice || prod.basePrice}</span>
+                              {prod.salePrice && prod.salePrice < prod.basePrice && <span className="text-[10px] text-gray-400 line-through">${prod.basePrice}</span>}
+                           </div>
+                        </div>
+                     );
+                  })}
+               </div>
+            </section >
+         )}
 
          {/* 4. New Arrivals (Grid) */}
-         < section className="px-4 pb-20" >
+         < section className="px-6 pb-20 max-w-7xl mx-auto" >
             <h3 className="text-lg font-black text-secondary dark:text-white mb-4">New Arrivals</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
                {products.map(prod => (

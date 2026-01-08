@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { signInWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserRole } from '../types';
 import logo from '../assets/logo.png';
@@ -26,108 +26,126 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
   const [password, setPassword] = useState('');
   const [selectedCountryCode, setSelectedCountryCode] = useState('+252');
   const [isLoading, setIsLoading] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
 
   const navigate = useNavigate();
-
-  const normalizePhone = (num: string) => {
-    return num.replace(/\D/g, '').replace(/^0+/, '');
-  };
 
   // OTP States
   const [isOtpMode, setIsOtpMode] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [otpCode, setOtpCode] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
 
-  // Helper: Call Cloud Function
-  const callFunction = async (name: string, data: any) => {
-    const { httpsCallable } = await import('firebase/functions');
-    const { functions } = await import('../lib/firebase');
-    const fn = httpsCallable(functions, name);
-    const result = await fn(data);
-    return result.data as any;
+  // Initialize Recaptcha
+  useEffect(() => {
+    if ((window as any).recaptchaVerifier) return;
+
+    try {
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible',
+        'callback': () => {
+          // reCAPTCHA solved
+        }
+      });
+    } catch (e) {
+      console.error("Recaptcha Init Error", e);
+    }
+  }, []);
+
+  const normalizePhone = (num: string) => {
+    return num.replace(/\D/g, '').replace(/^0+/, '');
   };
 
   const handleSendOtp = async () => {
+    if (method === 'email') {
+      setError("Email OTP not yet supported. Please use Password or Phone.");
+      return;
+    }
+
     setError(null);
     setIsLoading(true);
 
-    let identifier = '';
-    if (method === 'email') {
-      identifier = inputValue.trim();
-    } else {
-      const cleanMobile = normalizePhone(inputValue);
-      identifier = `${selectedCountryCode}${cleanMobile}`;
-    }
+    const cleanMobile = normalizePhone(inputValue);
+    const identifier = `${selectedCountryCode}${cleanMobile}`;
 
-    if (!identifier) {
-      setError("Please enter valid contact details.");
+    if (!cleanMobile) {
+      setError("Please enter a valid phone number.");
       setIsLoading(false);
       return;
     }
 
     try {
-      await callFunction('requestOtp', { identifier, method });
+      const appVerifier = (window as any).recaptchaVerifier;
+      const confirmation = await signInWithPhoneNumber(auth, identifier, appVerifier);
+      setConfirmationResult(confirmation);
       setOtpSent(true);
     } catch (err: any) {
       console.error("OTP Request Failed", err);
-      setError(err.message || "Failed to send code.");
+      let msg = "Failed to send code.";
+      if (err.code === 'auth/captcha-check-failed') msg = "Security check failed. Please refresh.";
+      else if (err.code === 'auth/invalid-phone-number') msg = "Invalid format. Use +252...";
+      else if (err.message.includes('reCAPTCHA')) msg = "Domain not verified. Check Firebase Console.";
+      else msg = err.message || "SMS Service Error.";
+
+      setError(msg);
+      if ((window as any).recaptchaVerifier) {
+        (window as any).recaptchaVerifier.clear();
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleVerifyOtp = async () => {
+    if (!confirmationResult) {
+      setError("Session expired. Request new code.");
+      return;
+    }
+
     setError(null);
     setIsVerifying(true);
 
-    let identifier = '';
-    if (method === 'email') {
-      identifier = inputValue.trim();
-    } else {
-      const cleanMobile = normalizePhone(inputValue);
-      identifier = `${selectedCountryCode}${cleanMobile}`;
-    }
-
     try {
-      const result = await callFunction('verifyOtp', { identifier, code: otpCode });
-      const { token } = result;
-
-      if (token) {
-        const { signInWithCustomToken } = await import('firebase/auth');
-        await signInWithCustomToken(auth, token);
-        const user = auth.currentUser!;
-        onLoginSuccess(user.uid);
-      }
+      const result = await confirmationResult.confirm(otpCode);
+      const user = result.user;
+      await onLoginSuccess(user.uid);
     } catch (err: any) {
       console.error("OTP Verification Failed", err);
-      setError(err.message || "Verification failed.");
+      setError("Invalid code. Please try again.");
     } finally {
       setIsVerifying(false);
     }
   };
 
   const onLoginSuccess = async (uid: string) => {
-    let userDoc = await getDoc(doc(db, "users", uid));
-    if (userDoc.exists()) {
-      const profileData = userDoc.data();
-      const actualRole = profileData.role as UserRole;
-      setAppRole(actualRole);
-      onLogin();
+    try {
+      let userDoc = await getDoc(doc(db, "users", uid));
+      if (userDoc.exists()) {
+        const profileData = userDoc.data();
+        const actualRole = profileData.role as UserRole;
+        setAppRole(actualRole);
+        onLogin();
 
-      const routes: Record<UserRole, string> = {
-        CUSTOMER: '/customer',
-        VENDOR: '/vendor',
-        RIDER: '/rider',
-        CLIENT: '/client',
-        ADMIN: '/admin'
-      };
+        const routes: Record<UserRole, string> = {
+          CUSTOMER: '/customer',
+          VENDOR: '/vendor',
+          RIDER: '/rider',
+          CLIENT: '/client',
+          ADMIN: '/admin'
+        };
 
-      navigate(routes[actualRole] || '/customer');
-    } else {
-      setError("Profile not found.");
+        navigate(routes[actualRole] || '/customer');
+      } else {
+        setError("Number not registered. We could not find a profile linked to this account.");
+      }
+    } catch (err: any) {
+      console.error("Login Success Error", err);
+      if (err.code === 'permission-denied') {
+        setError("Access Denied: Account exists but is locked.");
+      } else {
+        setError("Failed to fetch profile. " + err.message);
+      }
     }
   };
 
@@ -162,11 +180,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
     } catch (err: any) {
       console.error("Login System Error:", err);
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        setError("Access Denied. Check credentials or register a new node.");
-      } else if (err.code === 'auth/network-request-failed') {
-        setError("Network Node Offline. Check connection.");
-      } else if (err.code === 'auth/too-many-requests') {
-        setError("Security Throttling: Too many attempts. Try later.");
+        setError("Access Denied. Check credentials.");
       } else {
         setError(`Identity Error: ${err.code || 'Sync Failure'}`);
       }
@@ -177,6 +191,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
 
   return (
     <div className="relative flex flex-col min-h-screen overflow-y-auto bg-background-light dark:bg-background-dark transition-colors duration-500 font-display pb-32">
+      <div id="recaptcha-container"></div>
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-cover bg-center opacity-[0.1] grayscale" style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2074&auto=format&fit=crop")' }}></div>
         <div className="absolute inset-0 bg-gradient-to-b from-secondary/20 via-background-light/60 to-background-light dark:from-primary/5 dark:via-background-dark/80 dark:to-background-dark pointer-events-none"></div>

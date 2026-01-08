@@ -19,27 +19,31 @@ const VendorEarnings: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Sync Transactions
+    // Sync Transactions - Simplified Query to avoid Index Issue
     const qTx = query(
       collection(db, "transactions"),
       where("userId", "==", user.uid),
-      orderBy("createdAt", "desc"),
-      limit(20)
+      limit(50)
     );
 
     const unsubTx = onSnapshot(qTx, (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      // Client-side Sort
+      data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setTransactions(data);
       setLoading(false);
     });
 
-    // Sync Payouts
+    // Sync Payouts - Simplified Query
     const qPay = query(
       collection(db, "payouts"),
-      where("vendorId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      where("vendorId", "==", user.uid)
     );
     const unsubPay = onSnapshot(qPay, (snapshot) => {
-      setPayouts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      // Client-side Sort
+      data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setPayouts(data);
     });
 
     return () => {

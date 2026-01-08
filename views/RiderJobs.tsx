@@ -6,6 +6,7 @@ import { collection, query, where, onSnapshot, updateDoc, doc, serverTimestamp, 
 import { db } from '../lib/firebase';
 import { Order } from '../types';
 import { useAuth } from '../Providers';
+import HeaderNotification from '../components/HeaderNotification';
 
 interface MeshBatch {
   id: string;
@@ -28,20 +29,24 @@ const RiderJobs: React.FC = () => {
 
     // Real Logic: Filter orders by Rider's Hub
     // If rider is "Central" or undefined, show all. Otherwise, filter strictly.
-    let q = query(collection(db, "orders"), where("status", "==", "PENDING"));
-
-    // Note: In a real app, we would add 'where("vendorHub", "==", profile.location)' to the query
-    // But since our mock data might not have vendorHub set, we'll do client-side filtering + fallback
+    // 1. Robust Query: Fetch recent orders and filter client-side to prevent Index/Assertion errors
+    // Simple query on collection reference
+    const q = query(collection(db, "orders"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
 
-      const hubFiltered = fetched.filter(o =>
+      // Filter for PENDING + Hub Match
+      const hubFiltered = allOrders.filter(o =>
+        o.status === "PENDING" &&
         !o.riderId &&
-        (profile.location === 'Central' || !o.vendorHub || o.vendorHub === profile.location)
+        (profile?.location === 'Central' || !o.vendorHub || o.vendorHub === profile?.location)
       );
 
       setAvailableOrders(hubFiltered);
+      setLoading(false);
+    }, (error) => {
+      console.error("Fleet Queue Error:", error);
       setLoading(false);
     });
 
@@ -137,9 +142,12 @@ const RiderJobs: React.FC = () => {
               <span className="text-[9px] font-black text-primary uppercase tracking-[0.3em] mt-1 block">Mesh Network Active</span>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-xs font-black text-secondary dark:text-white leading-none">{availableOrders.length}</p>
-            <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1">Pending Nodes</p>
+          <div className="flex items-center gap-4">
+            <HeaderNotification />
+            <div className="text-right">
+              <p className="text-xs font-black text-secondary dark:text-white leading-none">{availableOrders.length}</p>
+              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1">Pending Nodes</p>
+            </div>
           </div>
         </div>
 
@@ -159,7 +167,7 @@ const RiderJobs: React.FC = () => {
             Single Jobs ({availableOrders.filter(o => !batches.some(b => b.orders.find(bo => bo.id === o.id))).length})
           </button>
         </div>
-      </header>
+      </header >
 
       <main className="flex-1 p-6 md:p-12 flex flex-col gap-6 overflow-y-auto pb-48 no-scrollbar animate-in fade-in duration-500 max-w-4xl mx-auto w-full">
         {loading ? (
@@ -168,8 +176,8 @@ const RiderJobs: React.FC = () => {
           /* MESH BATCH LISTING */
           batches.length === 0 ? (
             <div className="py-32 text-center opacity-30">
-              <span className="material-symbols-outlined text-6xl block mb-4">rebase_edit</span>
-              <p className="text-xs font-black uppercase tracking-widest">No efficient mesh clusters detected in your zone</p>
+              <span className="material-symbols-outlined text-6xl block mb-4">inbox</span>
+              <p className="text-xs font-black uppercase tracking-widest">No data available yet</p>
             </div>
           ) : (
             batches.map(batch => (
@@ -246,7 +254,7 @@ const RiderJobs: React.FC = () => {
         )}
       </main>
       <BottomNav />
-    </div>
+    </div >
   );
 };
 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart, useAuth } from '../Providers';
-import { collection, doc, runTransaction, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
+import { collection, doc, runTransaction, serverTimestamp, increment, arrayUnion, getDoc } from 'firebase/firestore';
 import { db, functions } from '../lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 
@@ -26,6 +26,7 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
    const { user, profile } = useAuth();
 
    const [currency, setCurrency] = useState<'USD' | 'SLSH'>('USD');
+   const [exchangeRate, setExchangeRate] = useState<number>(8500);
    const [isAtomic, setIsAtomic] = useState(false);
 
    const [selectedMethod, setSelectedMethod] = useState<string>('ZAAD');
@@ -65,6 +66,27 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
       }
    }, [profile]);
 
+   useEffect(() => {
+      // Fetch Exchange Rate
+      const fetchRate = async () => {
+         try {
+            const rateSnap = await getDoc(doc(db, "settings", "exchange_rates"));
+            if (rateSnap.exists()) {
+               setExchangeRate(rateSnap.data().rate || 8500);
+            }
+         } catch (err) {
+            console.error("Failed to fetch exchange rate", err);
+         }
+      };
+      fetchRate();
+   }, []);
+
+   const deliveryFee = isAtomic ? 8.50 : 5.00;
+   const totalUsd = cartTotal + deliveryFee;
+   const isSlshPayment = selectedMethod !== 'CARD' && totalUsd < 100;
+   const finalAmount = isSlshPayment ? totalUsd * exchangeRate : totalUsd;
+   const displayCurrency = isSlshPayment ? 'SLSH' : 'USD';
+
    const handleFinalizeOrder = async () => {
       setCheckoutStage('PROCESSING');
 
@@ -82,7 +104,9 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
             isAtomic,
             cartItems: cart,
             savePayment: user && savePaymentDetails,
-            syncCartId: syncCartId
+            syncCartId: syncCartId,
+            currency: displayCurrency,
+            exchangeRate: isSlshPayment ? exchangeRate : 1
          };
 
          const orderResult: any = (await createOrder(payload)).data;
@@ -97,7 +121,9 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
             paymentMethod: selectedMethod,
             paymentDetails: selectedMethod === 'CARD' ? { last4: cardData.number.slice(-4) } : {
                mobile: paymentPhone || recipient.phone
-            }
+            },
+            amount: finalAmount,
+            currency: displayCurrency
          };
 
          // If it's a mobile provider, we might want to show "AWAITING_USSD" UI *before* callingor *during*?
@@ -170,8 +196,7 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
       handlePlaceOrder(true);
    };
 
-   const deliveryFee = isAtomic ? 8.50 : 5.00;
-   const totalUsd = cartTotal + deliveryFee;
+
 
    return (
       <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark font-display transition-colors">
@@ -289,6 +314,22 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                   )}
                </section>
 
+               {/* Exchange Rate Notice */}
+               {isSlshPayment && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-[32px] border border-blue-100 dark:border-blue-800 flex gap-4 items-start">
+                     <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-200 flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined">currency_exchange</span>
+                     </div>
+                     <div>
+                        <h4 className="text-sm font-black text-secondary dark:text-white uppercase leading-none mb-1">Local Currency Conversion</h4>
+                        <p className="text-[10px] text-gray-500 font-medium leading-relaxed">
+                           transactions under $100 via Mobile Money are processed in Somaliland Shillings.
+                           <br /><span className="font-bold">Rate: 1 USD = {exchangeRate.toLocaleString()} SLSH</span>
+                        </p>
+                     </div>
+                  </div>
+               )}
+
                <section className="bg-white dark:bg-surface-dark p-10 rounded-[48px] border border-gray-100 dark:border-white/5 shadow-soft">
                   <label className="flex items-center gap-5 cursor-pointer">
                      <input type="checkbox" checked={agreedToTerms} onChange={e => setAgreedToTerms(e.target.checked)} className="rounded-xl text-primary focus:ring-primary h-8 w-8 border-2 border-gray-200" />
@@ -306,7 +347,10 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                      <div className="relative z-10 space-y-12">
                         <div>
                            <p className="text-[11px] font-black text-primary uppercase tracking-[0.5em] mb-4">Final Settlement Total</p>
-                           <h2 className="text-7xl font-black tracking-tighter leading-none">${totalUsd.toFixed(2)}</h2>
+                           <h2 className="text-5xl lg:text-6xl font-black tracking-tighter leading-none whitespace-nowrap">
+                              {displayCurrency === 'USD' ? '$' : 'SLSH '}{finalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                           </h2>
+                           {isSlshPayment && <p className="text-white/50 text-[10px] uppercase font-bold tracking-widest mt-2">{totalUsd.toFixed(2)} USD Eqv.</p>}
                         </div>
 
                         <div className="space-y-6 border-t border-white/10 pt-10">
@@ -432,7 +476,7 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                   Waiting for PIN authorization on device...
                </p>
                <div className="bg-white/10 backdrop-blur-md px-6 py-2 rounded-full border border-white/20">
-                  <p className="text-[10px] font-black text-white uppercase tracking-widest">Merchant: Fudaydiye Platform • Amount: ${totalUsd.toFixed(2)}</p>
+                  <p className="text-[10px] font-black text-white uppercase tracking-widest">Merchant: Fudaydiye Platform • Amount: {displayCurrency === 'USD' ? '$' : 'SLSH '}{finalAmount.toLocaleString()}</p>
                </div>
             </div>
          )}

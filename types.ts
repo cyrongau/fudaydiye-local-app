@@ -66,6 +66,8 @@ export interface Product {
   externalUrl?: string;
   originCountry?: string;
   comparePrice?: number;
+  isFlashDeal?: boolean;
+  flashSaleEndTime?: any;
 }
 
 export interface CartItem {

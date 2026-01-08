@@ -10,7 +10,7 @@ import { useToast } from '../context/ToastContext';
 const AdminConfig: React.FC = () => {
   const navigate = useNavigate();
   const { success: toastSuccess, error: toastError } = useToast();
-  const [activeTab, setActiveTab] = useState<'PARAMETERS' | 'DIRECT_APIS' | 'GOOGLE_MAPS' | 'VIDEO_MESH' | 'BUSINESS'>('BUSINESS');
+  const [activeTab, setActiveTab] = useState<'PARAMETERS' | 'DIRECT_APIS' | 'GOOGLE_MAPS' | 'VIDEO_MESH' | 'BUSINESS' | 'COMMUNICATIONS'>('BUSINESS');
   const [isAiAuditing, setIsAiAuditing] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -31,7 +31,9 @@ const AdminConfig: React.FC = () => {
     premierBank: { merchantId: '', apiKey: '', endpoint: '', active: false },
     maps: { apiKey: '', active: false },
     agora: { appId: '', certificate: '', active: false },
-    livekit: { apiKey: '', apiSecret: '', host: '', active: false }
+    livekit: { apiKey: '', apiSecret: '', host: '', active: false },
+    whatsapp: { phoneId: '', token: '', namespace: '', active: false },
+    sms: { provider: 'twilio', apiKey: '', senderId: '', sid: '', active: false }
   });
 
   const [business, setBusiness] = useState({
@@ -191,7 +193,7 @@ const AdminConfig: React.FC = () => {
           >
             Business Identity
           </button>
-          {(['PARAMETERS', 'DIRECT_APIS', 'GOOGLE_MAPS', 'VIDEO_MESH'] as const).map(tab => (
+          {(['PARAMETERS', 'DIRECT_APIS', 'COMMUNICATIONS', 'GOOGLE_MAPS', 'VIDEO_MESH'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -506,6 +508,70 @@ const AdminConfig: React.FC = () => {
                 <CredentialField label="LiveKit Server URL" value={integrations.livekit.host} onChange={(val) => setIntegrations({ ...integrations, livekit: { ...integrations.livekit, host: val } })} />
                 <CredentialField label="API Key" value={integrations.livekit.apiKey} onChange={(val) => setIntegrations({ ...integrations, livekit: { ...integrations.livekit, apiKey: val } })} />
                 <CredentialField label="API Secret" value={integrations.livekit.apiSecret} onChange={(val) => setIntegrations({ ...integrations, livekit: { ...integrations.livekit, apiSecret: val } })} isSecret />
+              </div>
+            </IntegrationCard>
+          </section>
+        )}
+
+        {activeTab === 'COMMUNICATIONS' && (
+          <section className="space-y-8">
+            <IntegrationCard
+              name="WhatsApp Business"
+              desc="Meta Cloud API"
+              icon="chat"
+              active={integrations.whatsapp?.active}
+              onToggle={() => setIntegrations({ ...integrations, whatsapp: { ...integrations.whatsapp, active: !integrations.whatsapp?.active } })}
+            >
+              <div className="space-y-4 pt-4">
+                <CredentialField label="Phone Number ID" value={integrations.whatsapp?.phoneId || ''} onChange={(val) => setIntegrations({ ...integrations, whatsapp: { ...integrations.whatsapp, phoneId: val } })} />
+                <CredentialField label="System User Token" value={integrations.whatsapp?.token || ''} onChange={(val) => setIntegrations({ ...integrations, whatsapp: { ...integrations.whatsapp, token: val } })} isSecret />
+                <CredentialField label="Template Namespace" value={integrations.whatsapp?.namespace || ''} onChange={(val) => setIntegrations({ ...integrations, whatsapp: { ...integrations.whatsapp, namespace: val } })} />
+              </div>
+            </IntegrationCard>
+
+            <IntegrationCard
+              name="SMS Gateway"
+              desc="Global Text Messaging"
+              icon="sms"
+              active={integrations.sms?.active}
+              onToggle={() => setIntegrations({ ...integrations, sms: { ...integrations.sms, active: !integrations.sms?.active } })}
+            >
+              <div className="space-y-6 pt-4">
+                <div className="px-2">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2 block mb-2">Provider</label>
+                  <div className="flex bg-gray-50 dark:bg-white/5 p-1 rounded-2xl border border-gray-100 dark:border-white/10 w-fit">
+                    {['twilio', 'msg91', 'firebase'].map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setIntegrations({ ...integrations, sms: { ...integrations.sms, provider: p } })}
+                        className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${integrations.sms?.provider === p ? 'bg-white shadow-sm text-secondary' : 'text-gray-400'}`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {integrations.sms?.provider === 'twilio' && (
+                  <>
+                    <CredentialField label="Account SID" value={integrations.sms?.sid || ''} onChange={(val) => setIntegrations({ ...integrations, sms: { ...integrations.sms, sid: val } })} />
+                    <CredentialField label="Auth Token" value={integrations.sms?.apiKey || ''} onChange={(val) => setIntegrations({ ...integrations, sms: { ...integrations.sms, apiKey: val } })} isSecret />
+                    <CredentialField label="Sender ID / From Number" value={integrations.sms?.senderId || ''} onChange={(val) => setIntegrations({ ...integrations, sms: { ...integrations.sms, senderId: val } })} />
+                  </>
+                )}
+
+                {integrations.sms?.provider === 'msg91' && (
+                  <>
+                    <CredentialField label="Auth Key" value={integrations.sms?.apiKey || ''} onChange={(val) => setIntegrations({ ...integrations, sms: { ...integrations.sms, apiKey: val } })} isSecret />
+                    <CredentialField label="Sender ID" value={integrations.sms?.senderId || ''} onChange={(val) => setIntegrations({ ...integrations, sms: { ...integrations.sms, senderId: val } })} />
+                  </>
+                )}
+
+                {integrations.sms?.provider === 'firebase' && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-2xl text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                    Firebase Authentication SMS is configured automatically via GCIP. No manual keys required here for basic Auth OTP.
+                  </div>
+                )}
               </div>
             </IntegrationCard>
           </section>
