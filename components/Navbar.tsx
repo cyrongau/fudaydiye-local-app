@@ -5,7 +5,7 @@ import { useAuth, useCart, useWishlist } from '../Providers';
 import UnifiedSearch from './UnifiedSearch';
 import HeaderNotification from './HeaderNotification';
 import { useSystemConfig } from '../hooks/useSystemConfig';
-import logo from '../assets/logo.png';
+import logo from '../assets/icon.png';
 
 const categories = [
   { name: 'Fashion', icon: 'checkroom', slug: 'fashion' },

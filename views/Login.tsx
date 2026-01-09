@@ -5,7 +5,7 @@ import { signInWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber, C
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserRole } from '../types';
-import logo from '../assets/logo.png';
+import logo from '../assets/icon.png';
 
 interface LoginProps {
   onLogin: () => void;
@@ -132,7 +132,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
           VENDOR: '/vendor',
           RIDER: '/rider',
           CLIENT: '/client',
-          ADMIN: '/admin'
+          ADMIN: '/admin',
+          FUDAYDIYE_ADMIN: '/admin'
         };
 
         navigate(routes[actualRole] || '/customer');

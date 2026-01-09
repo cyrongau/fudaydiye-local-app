@@ -6,7 +6,7 @@ import NotificationHub from './NotificationHub';
 import UnifiedSearch from './UnifiedSearch';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import logo from '../assets/logo.png';
+import logo from '../assets/icon.png';
 
 const DashboardHeader: React.FC = () => {
   const navigate = useNavigate();

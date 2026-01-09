@@ -4,7 +4,7 @@ import splashLogistics from '../src/assets/onboarding/splash_logistics_clean.png
 import splashLive from '../src/assets/onboarding/splash_live_clean.png';
 import splashVendor from '../src/assets/onboarding/splash_vendor_clean.png';
 import splashRider from '../src/assets/onboarding/splash_rider_clean.png';
-import logo from '../src/assets/logo.png'; // Assuming standard logo path
+import logo from '../assets/icon.png';
 
 const slides = [
     {
