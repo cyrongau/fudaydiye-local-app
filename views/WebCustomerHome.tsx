@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useCart, useAuth } from '../Providers';
+import { useCart, useAuth, useWishlist } from '../Providers';
 import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product, CMSContent, CategoryNode, LiveSaleSession, UserProfile } from '../types';
@@ -12,6 +12,7 @@ const WebCustomerHome: React.FC = () => {
 
    const navigate = useNavigate();
    const { addToCart } = useCart();
+   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
    const [products, setProducts] = useState<Product[]>([]);
    const [flashDeals, setFlashDeals] = useState<Product[]>([]);
    const [heroSlides, setHeroSlides] = useState<CMSContent[]>([]);
@@ -303,7 +304,12 @@ const WebCustomerHome: React.FC = () => {
                   <div key={prod.id} onClick={() => navigate(`/customer/product/${prod.id}`)} className="bg-white dark:bg-white/5 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-white/5 relative group">
                      <div className="aspect-square bg-[#F5F5F7] dark:bg-black/30 rounded-xl mb-3 overflow-hidden relative">
                         <img src={prod.images[0]} className="w-full h-full object-mix-blend-multiply dark:mix-blend-normal" />
-                        <button className="absolute top-2 right-2 size-6 bg-white rounded-full shadow flex items-center justify-center text-gray-400 hover:text-red-500"><span className="material-symbols-outlined text-[14px]">favorite</span></button>
+                        <button onClick={(e) => {
+                           e.stopPropagation();
+                           isInWishlist(prod.id) ? removeFromWishlist(prod.id) : addToWishlist(prod);
+                        }} className={`absolute top-2 right-2 size-6 bg-white rounded-full shadow flex items-center justify-center transition-colors ${isInWishlist(prod.id) ? 'text-red-500' : 'text-gray-400 hover:text-red-500'} `}>
+                           <span className={`material-symbols-outlined text-[14px] ${isInWishlist(prod.id) ? 'fill-current' : ''} `}>favorite</span>
+                        </button>
                      </div>
                      <h4 className="text-[11px] font-medium text-gray-600 dark:text-gray-300 leading-tight mb-1 h-8 line-clamp-2">{prod.name}</h4>
                      <div className="flex items-center justify-between">
@@ -516,12 +522,19 @@ const LiveCard: React.FC<{ session: LiveSaleSession; onClick: () => void }> = ({
 const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
    const navigate = useNavigate();
    const { addToCart } = useCart();
+   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
    const disc = product.salePrice ? Math.round((1 - product.salePrice / product.basePrice) * 100) : 0;
    return (
       <div onClick={() => navigate(`/customer/product/${product.id}`)} className="bg-white dark:bg-surface-dark rounded-[40px] p-5 border border-gray-100 dark:border-white/5 shadow-soft group hover:-translate-y-2 transition-all cursor-pointer flex flex-col h-full">
          <div className="relative aspect-square rounded-[32px] overflow-hidden bg-gray-50 dark:bg-black/20 mb-5 shadow-inner">
             <img src={product.images?.[0] || 'https://picsum.photos/400/400'} className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-[2s]" alt="" />
             {disc > 0 && <div className="absolute top-4 left-4 bg-red-600 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest shadow-lg">-{disc}%</div>}
+            <button onClick={(e) => {
+               e.stopPropagation();
+               isInWishlist(product.id) ? removeFromWishlist(product.id) : addToWishlist(product);
+            }} className={`absolute top-4 right-4 size-8 bg-white rounded-full shadow-md flex items-center justify-center transition-colors z-10 ${isInWishlist(product.id) ? 'text-red-500' : 'text-gray-400 hover:text-red-500'} `}>
+               <span className={`material-symbols-outlined text-[18px] ${isInWishlist(product.id) ? 'fill-current' : ''} `}>favorite</span>
+            </button>
          </div>
          <div className="flex-1 flex flex-col">
             <span className="text-[9px] font-black text-primary uppercase tracking-[0.3em] truncate max-w-[100px]">{product.vendor}</span>

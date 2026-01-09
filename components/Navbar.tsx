@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, useCart } from '../Providers';
+import { useAuth, useCart, useWishlist } from '../Providers';
 import UnifiedSearch from './UnifiedSearch';
 import HeaderNotification from './HeaderNotification';
 import { useSystemConfig } from '../hooks/useSystemConfig';
@@ -22,6 +22,7 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const { user, role, profile } = useAuth();
   const { cart } = useCart();
+  const { wishlist } = useWishlist();
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
@@ -109,8 +110,13 @@ const Navbar: React.FC = () => {
             <span className="material-symbols-outlined">{isDarkMode ? 'light_mode' : 'dark_mode'}</span>
           </button>
 
-          <button onClick={() => navigate('/customer/profile')} className="text-secondary dark:text-white hover:text-primary transition-colors ml-2">
+          <button onClick={() => navigate('/customer/wishlist')} className="relative text-secondary dark:text-white hover:text-primary transition-colors ml-2">
             <span className="material-symbols-outlined text-[32px]">favorite_border</span>
+            {wishlist.length > 0 && (
+              <span className="absolute -top-1 -right-1 size-5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-white dark:border-surface-dark">
+                {wishlist.length}
+              </span>
+            )}
           </button>
 
           <button

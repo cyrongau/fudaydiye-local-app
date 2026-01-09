@@ -12,6 +12,7 @@ import Sidebar from './components/Sidebar';
 import Footer from './components/Footer';
 import BottomNav from './components/BottomNav';
 import LocationTracker from './components/LocationTracker';
+import PullToRefresh from './components/PullToRefresh';
 import { usePlatform } from './hooks/usePlatform';
 import { Capacitor } from '@capacitor/core';
 
@@ -71,6 +72,7 @@ import Cart from './views/Cart';
 import Checkout from './views/Checkout';
 import TrackingMap from './views/TrackingMap';
 import Profile from './views/Profile';
+import Wishlist from './views/Wishlist';
 import AdminCMSDashboard from './views/AdminCMSDashboard';
 import AdminCMSEditor from './views/AdminCMSEditor';
 import AdminAbandonmentReport from './views/AdminAbandonmentReport';
@@ -154,11 +156,13 @@ const MainLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
         )}
 
         <main className={`flex-1 overflow-y-auto no-scrollbar pb-24 md:pb-0 transition-all duration-500 ${isDashboardRoute && !isAuthPage ? 'bg-gray-50/30 dark:bg-black/10' : ''}`}>
-          <div className={`${isDashboardRoute && !isAuthPage ? 'p-6 lg:p-10' : ''}`}>
-            {children}
-          </div>
-          {/* Footer on Web, hidden on Dashboard */}
-          {!isAuthPage && !isDashboardRoute && <Footer />}
+          <PullToRefresh>
+            <div className={`${isDashboardRoute && !isAuthPage ? 'p-6 lg:p-10' : ''}`}>
+              {children}
+            </div>
+            {/* Footer on Web, hidden on Dashboard */}
+            {!isAuthPage && !isDashboardRoute && <Footer />}
+          </PullToRefresh>
         </main>
       </div>
 
@@ -225,6 +229,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/customer/orders" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><CustomerOrders /></ProtectedRoute>} />
         <Route path="/customer/checkout" element={<Checkout isAuthenticated={true} />} />
         <Route path="/customer/profile" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Profile isAuthenticated={true} /></ProtectedRoute>} />
+        <Route path="/customer/wishlist" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Wishlist /></ProtectedRoute>} />
         <Route path="/customer/track/:id" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR']}><TrackingMap /></ProtectedRoute>} />
         <Route path="/customer/live/:id" element={<LiveStream />} />
         <Route path="/customer/personal-info" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR', 'RIDER', 'CLIENT', 'ADMIN', 'FUDAYDIYE_ADMIN']}><PersonalInfo /></ProtectedRoute>} />

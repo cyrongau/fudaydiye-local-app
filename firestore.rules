@@ -78,6 +78,11 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    // 9. Wishlists
+    match /wishlists/{wishlistId} {
+      allow read, write: if isSignedIn() && (wishlistId == request.auth.uid);
+    }
+
     // 4. System Config & Settings
     match /system_config/{configId} {
       allow read: if true;
@@ -113,6 +118,25 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
         resource.data.vendorId == request.auth.uid || // Vendor can reply
         resource.data.userId == request.auth.uid // Author can edit
+      );
+    }
+
+    // 13. Notifications
+    match /notifications/{notificationId} {
+      allow read, write: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn(); // Allow system/functions to create
+    }
+
+    // 14. Live Sessions
+    match /live_sessions/{sessionId} {
+      allow read: if true;
+      allow write: if isSignedIn() && (
+        resource.data.hostId == request.auth.uid || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'FUDAYDIYE_ADMIN'
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.hostId == request.auth.uid ||
+        request.auth.token.role == 'FUDAYDIYE_ADMIN'
       );
     }
 

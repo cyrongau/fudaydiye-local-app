@@ -195,121 +195,123 @@ const VendorProductManagement: React.FC = () => {
    const mainCats = categories.filter(c => !c.parentId);
 
    return (
-      <div className="flex flex-col h-full animate-in fade-in duration-700 font-display">
-         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
-            <div>
-               <h1 className="text-4xl font-black text-secondary dark:text-white tracking-tighter uppercase leading-none">Catalog Hub</h1>
-               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em] mt-3">Manual SKU & Asset Control</p>
-            </div>
-            <button
-               onClick={() => { setEditingId(null); setFormState({ name: '', productType: 'SIMPLE', basePrice: 0, salePrice: 0, tags: [], baseStock: 0, images: [], category: categories[0]?.name || 'Fashion', shortDescription: '', description: '', status: 'ACTIVE', attributes: [], variations: [] }); setShowModal(true); }}
-               className="h-14 md:h-16 px-6 md:px-10 bg-primary text-secondary rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3 w-full md:w-auto"
-            >
-               <span className="material-symbols-outlined">add_box</span>
-               New Listing
-            </button>
-         </header>
-
-         {/* Search and Filter Toolbar */}
-         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="md:col-span-2 relative">
-               <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
-               <input
-                  type="text"
-                  placeholder="Search inventory by name, SKU, or tag..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-12 pl-12 pr-4 bg-white dark:bg-surface-dark border border-gray-100 dark:border-white/5 rounded-2xl text-sm font-bold placeholder:font-medium placeholder:text-gray-400 outline-none focus:border-primary/50 transition-colors shadow-sm"
-               />
-            </div>
-            <div className="relative">
-               <select
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-full h-12 pl-4 pr-10 bg-white dark:bg-surface-dark border border-gray-100 dark:border-white/5 rounded-2xl text-xs font-black uppercase appearance-none outline-none focus:border-primary/50 transition-colors shadow-sm cursor-pointer"
+      <>
+         <div className="flex flex-col h-full animate-in fade-in duration-700 font-display">
+            <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
+               <div>
+                  <h1 className="text-4xl font-black text-secondary dark:text-white tracking-tighter uppercase leading-none">Catalog Hub</h1>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em] mt-3">Manual SKU & Asset Control</p>
+               </div>
+               <button
+                  onClick={() => { setEditingId(null); setFormState({ name: '', productType: 'SIMPLE', basePrice: 0, salePrice: 0, tags: [], baseStock: 0, images: [], category: categories[0]?.name || 'Fashion', shortDescription: '', description: '', status: 'ACTIVE', attributes: [], variations: [] }); setShowModal(true); }}
+                  className="h-14 md:h-16 px-6 md:px-10 bg-primary text-secondary rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3 w-full md:w-auto"
                >
-                  <option value="All">All Categories</option>
-                  {mainCats.map(c => (
-                     <option key={c.id} value={c.name}>{c.name}</option>
-                  ))}
-               </select>
-               <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">filter_list</span>
-            </div>
-         </div>
+                  <span className="material-symbols-outlined">add_box</span>
+                  New Listing
+               </button>
+            </header>
 
-         <div className="bg-white dark:bg-surface-dark rounded-[40px] border border-gray-100 dark:border-white/5 shadow-soft overflow-hidden flex-1 flex flex-col min-h-0">
-            <div className="overflow-x-auto h-full overflow-y-auto no-scrollbar">
-               <table className="w-full text-left">
-                  <thead>
-                     <tr className="border-b border-gray-50 dark:border-white/5 bg-gray-50/50 dark:bg-white/2 font-black text-[10px] text-gray-400 uppercase tracking-widest">
-                        <th className="py-5 px-4 md:px-8">Product Node</th>
-                        <th className="py-5 px-6 hidden md:table-cell">Type</th>
-                        <th className="py-5 px-4 md:px-6 text-right md:text-left">Main Price</th>
-                        <th className="py-5 px-6 hidden md:table-cell">Status</th>
-                        <th className="py-5 px-8 text-right">Actions</th>
-                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-white/2">
-                     {loading ? (
-                        <tr><td colSpan={5} className="py-20 text-center uppercase font-black text-[10px]">Syncing Mesh...</td></tr>
-                     ) : filteredProducts.length === 0 ? (
-                        <tr><td colSpan={5} className="py-20 text-center uppercase font-black text-[10px] text-gray-400">No products match your search.</td></tr>
-                     ) : filteredProducts.map(p => (
-                        <tr
-                           key={p.id}
-                           onClick={() => { setEditingId(p.id); setFormState(p); setShowModal(true); }}
-                           className="group hover:bg-gray-50/50 dark:hover:bg-white/2 transition-colors cursor-pointer"
-                        >
-                           <td className="py-5 px-4 md:px-8">
-                              <div className="flex items-center gap-4">
-                                 <img src={p.images?.[0] || 'https://picsum.photos/200'} className="size-12 rounded-xl object-cover border dark:border-white/10" alt="" />
-                                 <div>
-                                    <p className="text-sm font-black text-secondary dark:text-white uppercase truncate max-w-[140px] md:max-w-[200px]">{p.name}</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                       <p className="text-[9px] font-bold text-gray-400 uppercase">{p.category}</p>
-                                       <span className={`md:hidden text-[7px] font-black px-1.5 py-0.5 rounded uppercase ${p.productType === 'VARIABLE' ? 'bg-purple-100 text-purple-700' : p.productType === 'EXTERNAL' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-                                          {(p.productType || 'S').substring(0, 1)}
-                                       </span>
-                                       <span className={`md:hidden size-1.5 rounded-full ${p.status === 'ACTIVE' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+            {/* Search and Filter Toolbar */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+               <div className="md:col-span-2 relative">
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+                  <input
+                     type="text"
+                     placeholder="Search inventory by name, SKU, or tag..."
+                     value={searchQuery}
+                     onChange={(e) => setSearchQuery(e.target.value)}
+                     className="w-full h-12 pl-12 pr-4 bg-white dark:bg-surface-dark border border-gray-100 dark:border-white/5 rounded-2xl text-sm font-bold placeholder:font-medium placeholder:text-gray-400 outline-none focus:border-primary/50 transition-colors shadow-sm"
+                  />
+               </div>
+               <div className="relative">
+                  <select
+                     value={filterCategory}
+                     onChange={(e) => setFilterCategory(e.target.value)}
+                     className="w-full h-12 pl-4 pr-10 bg-white dark:bg-surface-dark border border-gray-100 dark:border-white/5 rounded-2xl text-xs font-black uppercase appearance-none outline-none focus:border-primary/50 transition-colors shadow-sm cursor-pointer"
+                  >
+                     <option value="All">All Categories</option>
+                     {mainCats.map(c => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                     ))}
+                  </select>
+                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">filter_list</span>
+               </div>
+            </div>
+
+            <div className="bg-white dark:bg-surface-dark rounded-[40px] border border-gray-100 dark:border-white/5 shadow-soft overflow-hidden flex-1 flex flex-col min-h-0">
+               <div className="overflow-x-auto h-full overflow-y-auto no-scrollbar">
+                  <table className="w-full text-left">
+                     <thead>
+                        <tr className="border-b border-gray-50 dark:border-white/5 bg-gray-50/50 dark:bg-white/2 font-black text-[10px] text-gray-400 uppercase tracking-widest">
+                           <th className="py-5 px-4 md:px-8">Product Node</th>
+                           <th className="py-5 px-6 hidden md:table-cell">Type</th>
+                           <th className="py-5 px-4 md:px-6 text-right md:text-left">Main Price</th>
+                           <th className="py-5 px-6 hidden md:table-cell">Status</th>
+                           <th className="py-5 px-8 text-right">Actions</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-50 dark:divide-white/2">
+                        {loading ? (
+                           <tr><td colSpan={5} className="py-20 text-center uppercase font-black text-[10px]">Syncing Mesh...</td></tr>
+                        ) : filteredProducts.length === 0 ? (
+                           <tr><td colSpan={5} className="py-20 text-center uppercase font-black text-[10px] text-gray-400">No products match your search.</td></tr>
+                        ) : filteredProducts.map(p => (
+                           <tr
+                              key={p.id}
+                              onClick={() => { setEditingId(p.id); setFormState(p); setShowModal(true); }}
+                              className="group hover:bg-gray-50/50 dark:hover:bg-white/2 transition-colors cursor-pointer"
+                           >
+                              <td className="py-5 px-4 md:px-8">
+                                 <div className="flex items-center gap-4">
+                                    <img src={p.images?.[0] || 'https://picsum.photos/200'} className="size-12 rounded-xl object-cover border dark:border-white/10" alt="" />
+                                    <div>
+                                       <p className="text-sm font-black text-secondary dark:text-white uppercase truncate max-w-[140px] md:max-w-[200px]">{p.name}</p>
+                                       <div className="flex items-center gap-2 mt-1">
+                                          <p className="text-[9px] font-bold text-gray-400 uppercase">{p.category}</p>
+                                          <span className={`md:hidden text-[7px] font-black px-1.5 py-0.5 rounded uppercase ${p.productType === 'VARIABLE' ? 'bg-purple-100 text-purple-700' : p.productType === 'EXTERNAL' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                                             {(p.productType || 'S').substring(0, 1)}
+                                          </span>
+                                          <span className={`md:hidden size-1.5 rounded-full ${p.status === 'ACTIVE' ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                                       </div>
                                     </div>
                                  </div>
-                              </div>
-                           </td>
-                           <td className="py-5 px-6 hidden md:table-cell">
-                              <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${p.productType === 'VARIABLE' ? 'bg-purple-100 text-purple-700' : p.productType === 'EXTERNAL' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-                                 {p.productType}
-                              </span>
-                           </td>
-                           <td className="py-5 px-4 md:px-6 text-right md:text-left">
-                              <div className="flex flex-col md:block">
-                                 <span className="text-sm font-black text-primary">${p.salePrice || p.basePrice}</span>
-                                 {p.salePrice > 0 && <span className="text-[9px] text-gray-400 line-through md:ml-2">${p.basePrice}</span>}
-                                 <div className="md:hidden mt-1 text-[9px] font-bold text-gray-400">Stock: {p.baseStock || 0}</div>
-                              </div>
-                              <div className="hidden md:block mt-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                                 {p.baseStock || 0} Units
-                              </div>
-                           </td>
-                           <td className="py-5 px-6 hidden md:table-cell">
-                              <span className={`text-[9px] font-black uppercase tracking-widest ${p.status === 'ACTIVE' ? 'text-primary' : 'text-gray-400'}`}>{p.status}</span>
-                           </td>
-                           <td className="py-5 px-8 text-right">
-                              <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                 <button onClick={() => { setEditingId(p.id); setFormState(p); setShowModal(true); }} className="size-9 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-primary transition-all"><span className="material-symbols-outlined text-[18px]">edit</span></button>
-                                 <button onClick={() => deleteDoc(doc(db, "products", p.id))} className="size-9 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-red-500 hover:bg-red-50 transition-all"><span className="material-symbols-outlined text-[18px]">delete</span></button>
-                              </div>
-                           </td>
-                        </tr>
-                     ))}
-                  </tbody>
-               </table>
+                              </td>
+                              <td className="py-5 px-6 hidden md:table-cell">
+                                 <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${p.productType === 'VARIABLE' ? 'bg-purple-100 text-purple-700' : p.productType === 'EXTERNAL' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    {p.productType}
+                                 </span>
+                              </td>
+                              <td className="py-5 px-4 md:px-6 text-right md:text-left">
+                                 <div className="flex flex-col md:block">
+                                    <span className="text-sm font-black text-primary">${p.salePrice || p.basePrice}</span>
+                                    {p.salePrice > 0 && <span className="text-[9px] text-gray-400 line-through md:ml-2">${p.basePrice}</span>}
+                                    <div className="md:hidden mt-1 text-[9px] font-bold text-gray-400">Stock: {p.baseStock || 0}</div>
+                                 </div>
+                                 <div className="hidden md:block mt-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                    {p.baseStock || 0} Units
+                                 </div>
+                              </td>
+                              <td className="py-5 px-6 hidden md:table-cell">
+                                 <span className={`text-[9px] font-black uppercase tracking-widest ${p.status === 'ACTIVE' ? 'text-primary' : 'text-gray-400'}`}>{p.status}</span>
+                              </td>
+                              <td className="py-5 px-8 text-right">
+                                 <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                    <button onClick={() => { setEditingId(p.id); setFormState(p); setShowModal(true); }} className="size-9 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-primary transition-all"><span className="material-symbols-outlined text-[18px]">edit</span></button>
+                                    <button onClick={() => deleteDoc(doc(db, "products", p.id))} className="size-9 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-red-500 hover:bg-red-50 transition-all"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                                 </div>
+                              </td>
+                           </tr>
+                        ))}
+                     </tbody>
+                  </table>
+               </div>
             </div>
          </div>
 
          {showModal && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 overflow-y-auto">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 md:p-4 overflow-y-auto">
                <div className="fixed inset-0 bg-secondary/90 backdrop-blur-xl" onClick={() => setShowModal(false)}></div>
-               <div className="relative w-full max-w-5xl bg-white dark:bg-surface-dark rounded-[56px] shadow-2xl p-10 max-h-[90vh] overflow-y-auto no-scrollbar border border-white/10 animate-in zoom-in-95">
+               <div className="relative w-full max-w-5xl bg-white dark:bg-surface-dark rounded-[32px] md:rounded-[56px] shadow-2xl p-6 md:p-10 h-[95vh] md:h-auto md:max-h-[95vh] overflow-y-auto no-scrollbar border border-white/10 animate-in zoom-in-95">
                   <header className="flex justify-between items-start mb-10">
                      <div>
                         <h2 className="text-3xl font-black text-secondary dark:text-white uppercase tracking-tighter">Listing Architect</h2>
@@ -505,7 +507,7 @@ const VendorProductManagement: React.FC = () => {
                </div>
             </div>
          )}
-      </div>
+      </>
    );
 };
 

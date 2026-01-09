@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { useAuth, useCart } from '../Providers';
+import { useAuth, useCart, useWishlist } from '../Providers';
 import { doc, getDoc, collection, query, where, limit, getDocs, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product, ProductVariation } from '../types';
@@ -21,6 +21,7 @@ const ProductDetails: React.FC = () => {
   const { id } = useParams();
   const { addToCart } = useCart();
   const { user, profile } = useAuth();
+  const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,6 +140,23 @@ const ProductDetails: React.FC = () => {
   if (loading) return <div className="h-screen flex items-center justify-center bg-background-light dark:bg-background-dark"><div className="size-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
   if (!product) return <div className="h-screen flex items-center justify-center font-black uppercase text-secondary dark:text-white">Node Identity Lost</div>;
 
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: product.name,
+          text: `Check out ${product.name} on Fudaydiye`,
+          url: window.location.href,
+        });
+      } catch (err) {
+        console.log('Error sharing:', err);
+      }
+    } else {
+      await navigator.clipboard.writeText(window.location.href);
+      alert('Link copied to clipboard!');
+    }
+  };
+
   const currentPrice = selectedVar
     ? (selectedVar.salePrice && selectedVar.salePrice > 0 ? selectedVar.salePrice : selectedVar.price)
     : (product.salePrice && product.salePrice > 0 ? product.salePrice : product.basePrice);
@@ -160,6 +178,17 @@ const ProductDetails: React.FC = () => {
           <div className="lg:col-span-6 space-y-6">
             <div className="relative aspect-square bg-white dark:bg-surface-dark rounded-[48px] overflow-hidden border border-gray-100 dark:border-white/5 shadow-soft group">
               <img src={activeImg} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="" />
+              <div className="absolute top-8 right-8 flex flex-col gap-4 z-20">
+                <button onClick={(e) => {
+                  e.preventDefault();
+                  isInWishlist(product.id) ? removeFromWishlist(product.id) : addToWishlist(product);
+                }} className={`size-12 rounded-full bg-white dark:bg-black/40 backdrop-blur-md shadow-xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 ${isInWishlist(product.id) ? 'text-red-500' : 'text-gray-400 hover:text-red-500'} `}>
+                  <span className={`material-symbols-outlined text-2xl ${isInWishlist(product.id) ? 'fill-current' : ''} `}>favorite</span>
+                </button>
+                <button onClick={handleShare} className="size-12 rounded-full bg-white dark:bg-black/40 backdrop-blur-md shadow-xl flex items-center justify-center text-gray-400 hover:text-primary transition-all hover:scale-110 active:scale-95">
+                  <span className="material-symbols-outlined text-2xl">share</span>
+                </button>
+              </div>
               {isCurrentlyOnSale && (
                 <div className="absolute top-8 left-8 bg-red-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl animate-bounce">
                   Flash Sale Node
@@ -168,7 +197,7 @@ const ProductDetails: React.FC = () => {
             </div>
             <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
               {product.images?.map((img, i) => (
-                <button key={i} onClick={() => setActiveImg(img)} className={`size - 24 rounded - [24px] overflow - hidden border - 2 transition - all p - 0.5 shrink - 0 ${activeImg === img ? 'border-primary shadow-lg scale-105' : 'border-gray-100 dark:border-white/5 opacity-60'} `}><img src={img} className="w-full h-full object-cover rounded-[20px]" alt="" /></button>
+                <button key={i} onClick={() => setActiveImg(img)} className={`size-24 rounded-[24px] overflow-hidden border-2 transition-all p-0.5 shrink-0 ${activeImg === img ? 'border-primary shadow-lg scale-105' : 'border-gray-100 dark:border-white/5 opacity-60'} `}><img src={img} className="w-full h-full object-cover rounded-[20px]" alt="" /></button>
               ))}
             </div>
           </div>
@@ -198,8 +227,8 @@ const ProductDetails: React.FC = () => {
                       key={v.id}
                       onClick={() => handleVarSelect(v)}
                       className={`p - 4 rounded - 2xl text - [10px] font - black uppercase tracking - widest transition - all border - 2 flex flex - col items - center gap - 2 text - center ${selectedVar?.id === v.id
-                          ? 'bg-secondary border-secondary text-primary shadow-lg scale-105'
-                          : 'bg-white dark:bg-surface-dark border-gray-100 dark:border-white/5 text-gray-400'
+                        ? 'bg-secondary border-secondary text-primary shadow-lg scale-105'
+                        : 'bg-white dark:bg-surface-dark border-gray-100 dark:border-white/5 text-gray-400'
                         } `}
                     >
                       {v.image && <img src={v.image} className="size-8 rounded-lg object-cover mb-1 border border-white/10" />}
@@ -235,7 +264,7 @@ const ProductDetails: React.FC = () => {
             </div>
 
             <div
-              onClick={() => navigate(`/ customer / vendor / ${product.vendorId} `)}
+              onClick={() => navigate(`/customer/vendor/${product.vendorId}`)}
               className="bg-white dark:bg-surface-dark p-6 rounded-[32px] border border-gray-100 dark:border-white/5 shadow-soft flex items-center justify-between group hover:border-primary/20 transition-all cursor-pointer"
             >
               <div className="flex items-center gap-4">
@@ -249,7 +278,7 @@ const ProductDetails: React.FC = () => {
 
         {/* Extended Details Section */}
         <section className="mt-24">
-          <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-2xl w-fit mb-12 border border-gray-200 dark:border-white/5">
+          <div className="flex flex-col md:flex-row gap-2 bg-gray-100 dark:bg-white/5 p-2 rounded-2xl w-full mb-12 border border-gray-200 dark:border-white/5">
             <TabBtn label="Narrative Details" active={activeTab === 'DESCRIPTION'} onClick={() => setActiveTab('DESCRIPTION')} />
             <TabBtn label="Specifications" active={activeTab === 'INFO'} onClick={() => setActiveTab('INFO')} />
             <TabBtn label="Reviews Ledger" active={activeTab === 'REVIEWS'} onClick={() => setActiveTab('REVIEWS')} />
@@ -406,7 +435,7 @@ const ProductDetails: React.FC = () => {
 };
 
 const TabBtn = ({ label, active, onClick }: any) => (
-  <button onClick={onClick} className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${active ? 'bg-white dark:bg-surface-dark text-primary shadow-sm' : 'text-gray-400 hover:text-secondary'}`}>{label}</button>
+  <button onClick={onClick} className={`px-6 md:px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap w-full md:w-auto ${active ? 'bg-white dark:bg-surface-dark text-primary shadow-sm' : 'text-gray-400 hover:text-secondary'}`}>{label}</button>
 );
 
 const InfoRow = ({ label, value }: any) => (

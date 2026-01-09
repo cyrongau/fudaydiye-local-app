@@ -52,6 +52,21 @@ export const useWallet = () => {
     return context;
 };
 
+interface WishlistContextType {
+    wishlist: any[]; // Using any[] temporarily to match implementation, but preferably strict type
+    addToWishlist: (product: any) => void;
+    removeFromWishlist: (productId: string) => void;
+    isInWishlist: (productId: string) => boolean;
+}
+
+const WishlistContext = createContext<WishlistContextType | undefined>(undefined);
+
+export const useWishlist = () => {
+    const context = useContext(WishlistContext);
+    if (!context) throw new Error('useWishlist must be used within Providers');
+    return context;
+};
+
 export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<FirebaseUser | null>(null);
     const [role, setRole] = useState<UserRole | null>(null);
@@ -200,15 +215,76 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
     const clearCart = () => updateCloudCart([]);
     const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
+    // --- Wishlist Logic ---
+    interface WishlistItem {
+        id: string; // productId
+        name: string;
+        price: number;
+        img: string;
+        vendor: string;
+        addedAt: any;
+    }
+
+    const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
+
+    // Sync Wishlist
+    useEffect(() => {
+        if (!syncCartId) return; // Re-using syncCartId as a generic user/guest ID identifier for simplicity, or we can make a separate one.
+        // Let's use the same ID strategy: auth uid or guest_cart_id.
+
+        const docRef = doc(db, "wishlists", syncCartId);
+        const unsub = onSnapshot(docRef, (snap) => {
+            if (snap.exists()) {
+                setWishlist(snap.data().items || []);
+            } else {
+                setWishlist([]);
+            }
+        }, (error) => console.error("Wishlist sync error:", error));
+        return () => unsub();
+    }, [syncCartId]);
+
+    const updateCloudWishlist = async (newItems: WishlistItem[]) => {
+        if (!syncCartId) return;
+        await setDoc(doc(db, "wishlists", syncCartId), {
+            userId: user ? user.uid : null,
+            guestId: !user ? syncCartId : null,
+            items: newItems,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+    };
+
+    const addToWishlist = (product: any) => {
+        if (wishlist.some(i => i.id === product.id)) return;
+        const newItem: WishlistItem = {
+            id: product.id,
+            name: product.name,
+            price: product.salePrice || product.basePrice || product.price,
+            img: product.images?.[0] || product.img,
+            vendor: product.vendor,
+            addedAt: new Date() // Client side timestamp for immediate UI, server overwrites if needed or we use arrayUnion
+        };
+        updateCloudWishlist([...wishlist, newItem]);
+    };
+
+    const removeFromWishlist = (productId: string) => {
+        const newItems = wishlist.filter(i => i.id !== productId);
+        updateCloudWishlist(newItems);
+    };
+
+    const isInWishlist = (productId: string) => wishlist.some(i => i.id === productId);
+
     return (
         <AuthContext.Provider value={{ user, role, profile, loading }}>
             <ToastProvider>
                 <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQty, clearCart, cartTotal, syncCartId }}>
-                    <WalletContext.Provider value={{ balance: profile?.walletBalance || 0, topUp: (a) => console.log(a) }}>
-                        {children}
-                    </WalletContext.Provider>
+                    <WishlistContext.Provider value={{ wishlist, addToWishlist, removeFromWishlist, isInWishlist }}>
+                        <WalletContext.Provider value={{ balance: profile?.walletBalance || 0, topUp: (a) => console.log(a) }}>
+                            {children}
+                        </WalletContext.Provider>
+                    </WishlistContext.Provider>
                 </CartContext.Provider>
             </ToastProvider>
         </AuthContext.Provider>
     );
 };
+
