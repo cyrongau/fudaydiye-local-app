@@ -151,7 +151,7 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
             Reset Session
           </button>
         </main>
-        <BottomNav />
+
       </div>
     );
   }
@@ -409,7 +409,7 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
         )
       }
 
-      <BottomNav />
+
     </div >
   );
 };

@@ -247,6 +247,7 @@ const Navbar: React.FC = () => {
                   <MobileNavLink label="Vendors" icon="storefront" onClick={() => { navigate('/customer/vendors'); setIsMobileMenuOpen(false); }} />
                   <MobileNavLink label="Shop" icon="shopping_bag" onClick={() => { navigate('/customer/explore'); setIsMobileMenuOpen(false); }} />
                   <MobileNavLink label="Orders" icon="package_2" onClick={() => { navigate('/customer/orders'); setIsMobileMenuOpen(false); }} />
+                  <MobileNavLink label="Wishlist" icon="favorite" onClick={() => { navigate('/customer/wishlist'); setIsMobileMenuOpen(false); }} />
                   <div className="h-px bg-gray-100 dark:bg-white/5 my-2"></div>
                   <MobileNavLink
                     label={isDarkMode ? "Light Mode" : "Dark Mode"}
