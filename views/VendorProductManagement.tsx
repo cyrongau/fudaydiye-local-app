@@ -284,6 +284,10 @@ const VendorProductManagement: React.FC = () => {
                               <div className="flex flex-col md:block">
                                  <span className="text-sm font-black text-primary">${p.salePrice || p.basePrice}</span>
                                  {p.salePrice > 0 && <span className="text-[9px] text-gray-400 line-through md:ml-2">${p.basePrice}</span>}
+                                 <div className="md:hidden mt-1 text-[9px] font-bold text-gray-400">Stock: {p.baseStock || 0}</div>
+                              </div>
+                              <div className="hidden md:block mt-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                 {p.baseStock || 0} Units
                               </div>
                            </td>
                            <td className="py-5 px-6 hidden md:table-cell">
@@ -347,7 +351,7 @@ const VendorProductManagement: React.FC = () => {
                         </div>
 
                         <div className="md:col-span-2 space-y-6">
-                           <div className="grid grid-cols-2 gap-4">
+                           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                               <div className="space-y-1.5">
                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Default Price ($)</label>
                                  <input type="number" step="0.01" value={formState.basePrice} onChange={e => setFormState({ ...formState, basePrice: parseFloat(e.target.value) })} className="w-full h-14 bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 rounded-2xl px-5 text-sm font-black" />
@@ -355,6 +359,10 @@ const VendorProductManagement: React.FC = () => {
                               <div className="space-y-1.5">
                                  <label className="text-[10px] font-black text-primary uppercase tracking-widest ml-1">Sale Price ($)</label>
                                  <input type="number" step="0.01" value={formState.salePrice} onChange={e => setFormState({ ...formState, salePrice: parseFloat(e.target.value) })} className="w-full h-14 border-2 border-primary/20 bg-white dark:bg-surface-dark rounded-2xl px-5 text-sm font-black text-primary placeholder:text-primary/30" placeholder="Optional" />
+                              </div>
+                              <div className="space-y-1.5 col-span-2 md:col-span-1">
+                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Stock Level</label>
+                                 <input type="number" value={formState.baseStock} onChange={e => setFormState({ ...formState, baseStock: parseInt(e.target.value) })} className="w-full h-14 bg-gray-50 dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 rounded-2xl px-5 text-sm font-black" placeholder="0" />
                               </div>
                            </div>
                            <div className="space-y-3">

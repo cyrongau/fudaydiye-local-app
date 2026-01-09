@@ -26,6 +26,8 @@ const BottomNav: React.FC<BottomNavProps> = ({ items: manualItems }) => {
       return [
         { label: 'Home', icon: 'home', path: '/' },
         { label: 'Explore', icon: 'category', path: '/customer/explore' },
+        // Centered Scan Button
+        { label: 'Pay', icon: 'qr_code_scanner', path: '/customer/scan', special: true },
         { label: 'Cart', icon: 'shopping_cart', path: '/customer/cart' },
         { label: 'Profile', icon: 'person', path: '/customer/profile' },
       ];
@@ -35,7 +37,8 @@ const BottomNav: React.FC<BottomNavProps> = ({ items: manualItems }) => {
       return [
         { label: 'Dashboard', icon: 'dashboard', path: '/vendor' },
         { label: 'Orders', icon: 'receipt_long', path: '/vendor/orders' },
-        // Using mobile menu for scan action conceptually for now, or direct link if exists
+        // Central Special Button: Scan
+        { label: 'Scan', icon: 'qr_code_scanner', path: '/vendor/scan', special: true },
         { label: 'Products', icon: 'inventory_2', path: '/vendor/management' },
         { label: 'Menu', icon: 'grid_view', path: '/mobile-menu' },
       ];
@@ -43,8 +46,10 @@ const BottomNav: React.FC<BottomNavProps> = ({ items: manualItems }) => {
 
     if (role === 'RIDER') {
       return [
-        { label: 'Dashboard', icon: 'two_wheeler', path: '/rider' },
+        { label: 'Status', icon: 'two_wheeler', path: '/rider' },
         { label: 'Tasks', icon: 'assignment', path: '/rider/assignments' },
+        // Central Special Button: Scan
+        { label: 'Scan', icon: 'qr_code_scanner', path: '/rider/scan', special: true },
         { label: 'Wallet', icon: 'account_balance_wallet', path: '/rider/wallet' },
         { label: 'Menu', icon: 'grid_view', path: '/mobile-menu' },
       ];

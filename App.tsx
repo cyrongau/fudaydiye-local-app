@@ -44,6 +44,7 @@ import RiderDeliveryConfirmation from './views/RiderDeliveryConfirmation';
 import RiderStatusUpdates from './views/RiderStatusUpdates';
 import RiderWallet from './views/RiderWallet';
 import RiderNavigationView from './views/RiderNavigationView';
+import PaymentConfirmation from './views/PaymentConfirmation';
 import ClientLogistics from './views/ClientLogistics';
 import ClientAnalytics from './views/ClientAnalytics';
 import ClientInvoices from './views/ClientInvoices';
@@ -230,6 +231,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/customer/addresses" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><SavedAddresses /></ProtectedRoute>} />
         <Route path="/customer/payments" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><LinkedPayments /></ProtectedRoute>} />
         <Route path="/customer/scan" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><GlobalScanView role="CUSTOMER" /></ProtectedRoute>} />
+        <Route path="/customer/pay-confirm" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><PaymentConfirmation /></ProtectedRoute>} />
 
         <Route path="/about" element={<AboutUs />} />
         <Route path="/contact" element={<ContactUs />} />
@@ -260,6 +262,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/vendor/live-cockpit/:id" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorLiveCockpit /></ProtectedRoute>} />
         <Route path="/vendor/abandonment" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><AdminAbandonmentReport /></ProtectedRoute>} />
         <Route path="/vendor/settings" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><UserSettings /></ProtectedRoute>} />
+        <Route path="/vendor/scan" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><GlobalScanView role="VENDOR" /></ProtectedRoute>} />
 
         <Route path="/rider" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderJobs /></ProtectedRoute>} />
         <Route path="/rider/assignments" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderJobAssignmentList /></ProtectedRoute>} />
@@ -269,6 +272,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/rider/wallet" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderWallet /></ProtectedRoute>} />
         <Route path="/rider/navigate/:id" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderNavigationView /></ProtectedRoute>} />
         <Route path="/rider/settings" element={<ProtectedRoute allowedRoles={['RIDER']}><UserSettings /></ProtectedRoute>} />
+        <Route path="/rider/scan" element={<ProtectedRoute allowedRoles={['RIDER']}><GlobalScanView role="RIDER" /></ProtectedRoute>} />
 
         {/* Client Routes */}
         <Route path="/client" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientLogistics /></ProtectedRoute>} />
