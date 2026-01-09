@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useCart } from '../Providers';
 import UnifiedSearch from './UnifiedSearch';
 import HeaderNotification from './HeaderNotification';
+import { useSystemConfig } from '../hooks/useSystemConfig';
 import logo from '../assets/logo.png';
 
 const categories = [
@@ -25,6 +26,7 @@ const Navbar: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const { config } = useSystemConfig();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
@@ -177,7 +179,9 @@ const Navbar: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[20px]">support_agent</span>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Support: +252 63 444 1122</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
+              Support: {config?.business?.phone || '+252 63 444 1122'}
+            </span>
           </div>
         </div>
       </div>

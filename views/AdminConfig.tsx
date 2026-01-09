@@ -161,8 +161,9 @@ const AdminConfig: React.FC = () => {
       }, { merge: true });
       toastSuccess('Ecosystem configuration synchronized.');
     } catch (err) {
-      console.error(err);
-      toastError('Node synchronization failure.');
+      console.error("Save Error:", err);
+      // @ts-ignore
+      toastError(`Sync Error: ${err.message || 'Unknown node failure'}`);
     } finally {
       setIsSaving(false);
     }

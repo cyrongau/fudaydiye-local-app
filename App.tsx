@@ -13,6 +13,7 @@ import Footer from './components/Footer';
 import BottomNav from './components/BottomNav';
 import LocationTracker from './components/LocationTracker';
 import { usePlatform } from './hooks/usePlatform';
+import { Capacitor } from '@capacitor/core';
 
 import Login from './views/Login';
 import Register from './views/Register';
@@ -89,7 +90,9 @@ import Onboarding from './views/Onboarding';
 
 const RootRedirect: React.FC = () => {
   const hasOnboarded = localStorage.getItem('fddy_onboarding_completed');
-  if (!hasOnboarded) {
+  const isNative = Capacitor.isNativePlatform();
+
+  if (isNative && !hasOnboarded) {
     return <Navigate to="/onboarding" replace />;
   }
   return <CustomerHome />;
@@ -128,6 +131,13 @@ const MainLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
     location.pathname.startsWith('/vendor') ||
     location.pathname.startsWith('/rider') ||
     location.pathname.startsWith('/client');
+
+  const isOnboarding = location.pathname === '/onboarding';
+
+  // If onboarding, render children directly without layout wrapper
+  if (isOnboarding) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">

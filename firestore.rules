@@ -78,7 +78,14 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
-    // ... (Notifications, Carts, Access Codes, System Config, Settings, CMS, Live Sessions, Live Chat, Stores - skipped for brevity)
+    // 4. System Config & Settings
+    match /system_config/{configId} {
+      allow read: if true;
+      allow write: if isSignedIn() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'FUDAYDIYE_ADMIN'
+      );
+    }
 
     // 11. Financials (Transactions & Payouts)
     match /transactions/{txId} {
