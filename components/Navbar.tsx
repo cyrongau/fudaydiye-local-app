@@ -196,7 +196,7 @@ const Navbar: React.FC = () => {
           <div className="size-8 bg-white rounded-lg flex items-center justify-center shadow-sm p-1">
             <img src={logo} alt="Fudaydiye" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-lg font-black text-secondary dark:text-white uppercase tracking-tighter">Fudaydiye</h1>
+          <h1 className="text-sm md:text-lg font-black text-secondary dark:text-white uppercase tracking-tighter">Fudaydiye</h1>
         </div>
 
         <div className="flex items-center gap-3">

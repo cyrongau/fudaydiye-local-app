@@ -239,7 +239,7 @@ const WebCustomerHome: React.FC = () => {
             </div>
 
             {/* Dynamic Promo Cards Section */}
-            <section className="py-6 md:py-12 px-6 max-w-7xl mx-auto flex gap-4 md:gap-8 overflow-x-auto snap-x no-scrollbar pb-6 flex-nowrap">
+            <section className="py-6 md:py-12 px-6 max-w-7xl mx-auto flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6">
                {promoCards.length > 0 ? (
                   promoCards.map((card, idx) => (
                      <div key={card.id} className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center">
@@ -322,7 +322,7 @@ const WebCustomerHome: React.FC = () => {
             mobileAds.length > 0 && (
                <section className="mb-8 px-4 md:hidden">
                   <h3 className="text-lg font-black text-secondary dark:text-white mb-4">Sponsored</h3>
-                  <div className="overflow-x-auto flex gap-4 snap-x no-scrollbar pb-4">
+                  <div className="flex flex-nowrap overflow-x-auto gap-4 snap-x snap-mandatory no-scrollbar pb-4">
                      {mobileAds.map(ad => (
                         <div key={ad.id} className="min-w-[85vw] snap-center">
                            {ad.adFormat === 'PRODUCT_CARD' ? (
@@ -400,9 +400,9 @@ const WebCustomerHome: React.FC = () => {
                <h2 className="text-3xl md:text-5xl font-black text-secondary dark:text-white uppercase tracking-tighter">Browse Hubs</h2>
                <div className="h-1 w-20 bg-primary mx-auto mt-4 rounded-full"></div>
             </div>
-            <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-6 md:gap-12">
+            <div className="max-w-7xl mx-auto flex flex-nowrap overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 gap-6 md:gap-12 px-6 -mx-6 md:mx-auto md:justify-center md:flex-wrap justify-start">
                {categories.map((cat) => (
-                  <button key={cat.id} onClick={() => navigate(`/customer/category/${cat.name.toLowerCase()}`)} className="flex flex-col items-center gap-4 group">
+                  <button key={cat.id} onClick={() => navigate(`/customer/category/${cat.name.toLowerCase()}`)} className="flex flex-col items-center gap-4 group shrink-0 snap-center">
                      <div className="size-20 md:size-28 rounded-full bg-primary/10 flex items-center justify-center border-2 border-transparent group-hover:border-primary group-hover:shadow-primary-glow transition-all relative overflow-hidden">
                         {cat.imageUrl ? <img src={cat.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-20 grayscale group-hover:grayscale-0 group-hover:opacity-40 transition-all" /> : <div className="absolute inset-0 bg-primary opacity-5"></div>}
                         <span className="material-symbols-outlined text-[32px] md:text-[42px] text-primary group-hover:scale-110 transition-transform relative z-10">{cat.icon || 'category'}</span>
@@ -414,7 +414,7 @@ const WebCustomerHome: React.FC = () => {
          </section>
 
          {/* Restored Category Banner Ads Section */}
-         <section className="py-6 md:py-12 px-6 max-w-7xl mx-auto flex gap-4 md:gap-8 overflow-x-auto snap-x no-scrollbar pb-6 flex-nowrap">
+         <section className="py-6 md:py-12 px-6 max-w-7xl mx-auto flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6">
             {(() => {
                const topCards = promoCards.filter(c => c.section === 'HOME_TOP_ROW' || !c.section).slice(0, 3);
                return topCards.length > 0 ? (
@@ -431,11 +431,11 @@ const WebCustomerHome: React.FC = () => {
                      </div>
                   ))
                ) : (
-                  <div className="flex gap-4 md:gap-8">
+                  <>
                      <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Smart Tech" promo="Up to 40% Off" img="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=1200" tag="Electronics Hub" link="/customer/category/electronics" /></div>
                      <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Luxe Beauty" promo="New Arrivals" img="https://images.unsplash.com/photo-1596462502278-27bfad4575a6?q=80&w=1200" tag="Cosmetic Node" orange link="/customer/category/beauty" /></div>
                      <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Home Living" promo="Free Shipping" img="https://images.unsplash.com/photo-1484101403633-562f891dc89a?q=80&w=1200" tag="Interior Mesh" link="/customer/category/home" /></div>
-                  </div>
+                  </>
                );
             })()}
          </section>
@@ -459,7 +459,7 @@ const WebCustomerHome: React.FC = () => {
             </div>
          </section>
 
-         <section className="py-6 md:py-20 px-6 max-w-7xl mx-auto flex gap-4 md:gap-8 overflow-x-auto snap-x no-scrollbar pb-6 flex-nowrap">
+         <section className="py-6 md:py-20 px-6 max-w-7xl mx-auto flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6">
             <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Men's Fashion" promo="Flat 70% Off" img="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=1200" tag="Weekend Sale" link="/customer/category/fashion" /></div>
             <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Women's Wear" promo="Min. 35% Off" img="https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=800" tag="Fashion Style" orange link="/customer/category/fashion" /></div>
             <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Accessories" promo="Verified Quality" img="https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=1200" tag="Premium Gear" link="/customer/category/accessories" /></div>

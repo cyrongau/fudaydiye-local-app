@@ -81,7 +81,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ items: manualItems }) => {
 
             if (item.special) {
               return (
-                <div key={item.label} className="relative flex flex-col items-center px-2 mb-6 z-[60]">
+                <div key={item.label} className="relative flex flex-col items-center px-2 mb-12 z-[60]">
                   <button
                     onClick={() => navigate(item.path)}
                     className="size-16 rounded-[24px] bg-secondary text-primary shadow-[0_12px_24px_rgba(1,87,84,0.4)] border-[6px] border-background-light dark:border-background-dark flex items-center justify-center transition-all active:scale-90 hover:scale-105 group relative overflow-hidden"

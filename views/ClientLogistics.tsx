@@ -121,10 +121,10 @@ const ClientLogistics: React.FC = () => {
             <div className="flex items-center gap-3">
                <button
                   onClick={() => navigate('/')}
-                  className="bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 px-4 py-2 rounded-xl flex items-center gap-2 transition-all active:scale-95"
+                  className="bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 size-10 md:size-auto md:px-4 md:py-2 rounded-full md:rounded-xl flex items-center justify-center md:justify-start gap-2 transition-all active:scale-95"
                >
-                  <span className="material-symbols-outlined text-[18px]">shopping_bag</span>
-                  <div className="flex flex-col items-start leading-none">
+                  <span className="material-symbols-outlined text-[20px] md:text-[18px]">shopping_bag</span>
+                  <div className="hidden md:flex flex-col items-start leading-none">
                      <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Switch To</span>
                      <span className="text-[10px] font-black uppercase tracking-widest">Consumer Mode</span>
                   </div>
@@ -138,7 +138,12 @@ const ClientLogistics: React.FC = () => {
             {showBookForm ? (
                <div className="animate-in slide-in-from-top-4 duration-300">
                   <div className="bg-white dark:bg-surface-dark p-6 rounded-[40px] border border-gray-100 dark:border-white/5 shadow-2xl space-y-6">
-                     <h2 className="text-lg font-black text-secondary dark:text-white uppercase tracking-tighter">New Delivery Request</h2>
+                     <div className="flex items-center justify-between">
+                        <h2 className="text-lg font-black text-secondary dark:text-white uppercase tracking-tighter">New Delivery Request</h2>
+                        <button onClick={() => setShowBookForm(false)} className="size-8 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors">
+                           <span className="material-symbols-outlined text-lg">close</span>
+                        </button>
+                     </div>
 
                      <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -278,6 +283,12 @@ const ClientLogistics: React.FC = () => {
                               </div>
                            ))
                         )}
+                        <button
+                           onClick={() => setShowBookForm(true)}
+                           className="fixed bottom-36 right-6 size-14 bg-primary text-secondary rounded-2xl shadow-xl flex items-center justify-center active:scale-90 transition-all z-40 border border-white/10"
+                        >
+                           <span className="material-symbols-outlined text-2xl font-black">add</span>
+                        </button>
                      </div>
                   ) : (
                      <div className="flex flex-col gap-6">

@@ -17,7 +17,7 @@ const CategoryRail: React.FC<CategoryRailProps> = ({ categories }) => {
                 <button onClick={() => navigate('/customer/explore')} className="text-[10px] font-bold text-primary uppercase tracking-wider">See All</button>
             </div>
 
-            <div className="flex overflow-x-auto pb-4 gap-4 md:grid md:grid-cols-6 md:gap-6 no-scrollbar snap-x">
+            <div className="flex flex-nowrap overflow-x-auto pb-4 gap-4 md:grid md:grid-cols-6 md:gap-6 no-scrollbar snap-x snap-mandatory">
                 {/* 'All' Card */}
                 <div onClick={() => navigate('/customer/explore')} className="flex flex-col items-center gap-2 min-w-[72px] md:min-w-0 snap-start cursor-pointer group">
                     <div className="size-16 md:size-24 rounded-2xl bg-[#E8F5F3] dark:bg-white/5 flex items-center justify-center text-[#015754] border-2 border-transparent group-hover:border-primary transition-all shadow-sm">

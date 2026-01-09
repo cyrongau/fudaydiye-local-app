@@ -85,6 +85,15 @@ import VendorLiveCockpit from './views/VendorLiveCockpit';
 import ContactUs from './views/ContactUs';
 import ScrollToTop from './components/ScrollToTop';
 import { ToastProvider } from './components/Toast';
+import Onboarding from './views/Onboarding';
+
+const RootRedirect: React.FC = () => {
+  const hasOnboarded = localStorage.getItem('fddy_onboarding_completed');
+  if (!hasOnboarded) {
+    return <Navigate to="/onboarding" replace />;
+  }
+  return <CustomerHome />;
+};
 
 import { UserRole, CartItem, UserProfile, CartNode } from './types';
 
@@ -187,7 +196,8 @@ const AppRoutes: React.FC = () => {
       <PermissionCheck />
       <LocationTracker />
       <Routes>
-        <Route path="/" element={<CustomerHome />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/select-identity" element={<RoleSelection onSelectRole={() => { }} />} />
         <Route path="/mobile-menu" element={<MobileMenu />} />
 

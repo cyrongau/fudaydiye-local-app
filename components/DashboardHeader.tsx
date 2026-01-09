@@ -86,7 +86,7 @@ const DashboardHeader: React.FC = () => {
           <img src={logo} alt="Fudaydiye" className="w-full h-full object-contain" />
         </div>
         <div className="flex flex-col">
-          <h1 className="text-xl font-black text-secondary dark:text-white tracking-tighter uppercase leading-[0.8]">Fudaydiye</h1>
+          <h1 className="text-sm md:text-xl font-black text-secondary dark:text-white tracking-tighter uppercase leading-[0.8]">Fudaydiye</h1>
           <span className="text-[8px] font-black text-primary uppercase tracking-[0.3em] mt-1">Global Terminal</span>
         </div>
       </div>
