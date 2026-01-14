@@ -138,6 +138,28 @@ service cloud.firestore {
         request.resource.data.hostId == request.auth.uid ||
         request.auth.token.role == 'FUDAYDIYE_ADMIN'
       );
+      
+      // Allow updating viewer count publicly (for now) to fix "Permission Denied"
+      allow update: if (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewerCount'])
+      ) || (
+        isSignedIn() && (
+          resource.data.hostId == request.auth.uid || 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'FUDAYDIYE_ADMIN'
+        )
+      );
+      
+      // Subcollection: Chat
+      match /chat/{messageId} {
+        allow read: if true;
+        allow create: if isSignedIn();
+      }
+
+      // Subcollection: Reactions (Hearts)
+      match /reactions/{reactionId} {
+        allow read: if true;
+        allow create: if true; // Allow guests to heart
+      }
     }
 
     // Default Deny

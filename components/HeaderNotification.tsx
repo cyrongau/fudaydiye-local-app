@@ -40,10 +40,17 @@ const HeaderNotification: React.FC = () => {
 
         const fetchNotifications = async () => {
             try {
-                const q = query(collection(db, "notifications"), where("userId", "==", user.uid), orderBy("createdAt", "desc"));
+                // Removed orderBy("createdAt", "desc") to avoid needing a composite index
+                const q = query(collection(db, "notifications"), where("userId", "==", user.uid));
                 const snap = await getDocs(q);
 
                 const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+                // Sort client-side
+                list.sort((a, b) => {
+                    const tA = a.createdAt?.seconds || 0;
+                    const tB = b.createdAt?.seconds || 0;
+                    return tB - tA;
+                });
                 setNotifications(list);
 
                 const unreadCount = list.filter(n => !n.read).length;
@@ -82,7 +89,7 @@ const HeaderNotification: React.FC = () => {
 
             {/* Notification Dropdown */}
             {showNotifications && (
-                <div className="absolute top-12 right-0 w-80 bg-white dark:bg-surface-dark rounded-2xl shadow-xl border border-gray-100 dark:border-white/5 p-4 z-50 animate-in slide-in-from-top-2 duration-200">
+                <div className="fixed top-20 left-1/2 -translate-x-1/2 w-[90vw] max-w-sm md:absolute md:top-12 md:left-auto md:right-0 md:translate-x-0 md:w-80 bg-white dark:bg-surface-dark rounded-2xl shadow-2xl border border-gray-100 dark:border-white/5 p-4 z-[100] animate-in slide-in-from-top-2 duration-200">
                     <div className="flex items-center justify-between mb-3">
                         <h4 className="text-xs font-black text-secondary dark:text-white uppercase tracking-wider">System Events</h4>
                         <button onClick={handleClearNotifications} className="text-[10px] font-bold text-red-500 hover:underline">Clear All</button>

@@ -60,7 +60,7 @@ const Navbar: React.FC = () => {
   };
 
   const handleActionClick = () => {
-    if (user) {
+    if (user && !user.isAnonymous) {
       const routes: Record<string, string> = {
         CUSTOMER: '/customer/profile',
         VENDOR: '/vendor',
@@ -134,7 +134,7 @@ const Navbar: React.FC = () => {
             onClick={handleActionClick}
             className="px-8 h-[56px] bg-secondary text-primary font-black text-[15px] uppercase tracking-[0.2em] rounded-[18px] shadow-lg hover:shadow-secondary/20 active:scale-95 transition-all ml-2"
           >
-            {user ? (role === 'CUSTOMER' ? 'Profile' : 'Dashboard') : 'Sign In'}
+            {user && !user.isAnonymous ? (role === 'CUSTOMER' ? 'Profile' : 'Dashboard') : 'Sign In'}
           </button>
         </div>
       </div>
@@ -185,9 +185,9 @@ const Navbar: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[20px]">support_agent</span>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
-              Support: {config?.business?.phone || '+252 63 444 1122'}
-            </span>
+            <a href={`tel:${(config?.business?.phone || '+252 63 8555590').replace(/[^0-9+]/g, '')}`} className="text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap hover:text-primary transition-colors">
+              Support: {config?.business?.phone || '+252 63 8555590'}
+            </a>
           </div>
         </div>
       </div>
@@ -255,8 +255,8 @@ const Navbar: React.FC = () => {
                     onClick={toggleTheme}
                   />
                   <MobileNavLink
-                    label={user ? (role === 'CUSTOMER' ? 'Profile' : 'Dashboard') : 'Sign In'}
-                    icon={user ? 'account_circle' : 'login'}
+                    label={user && !user.isAnonymous ? (role === 'CUSTOMER' ? 'Profile' : 'Dashboard') : 'Sign In'}
+                    icon={user && !user.isAnonymous ? 'account_circle' : 'login'}
                     onClick={() => { handleActionClick(); setIsMobileMenuOpen(false); }}
                   />
                 </div>

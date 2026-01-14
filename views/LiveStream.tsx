@@ -33,6 +33,10 @@ const LiveStream: React.FC = () => {
   const [isEnding, setIsEnding] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [isStreamBlocked, setIsStreamBlocked] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false); // New State
+  const [isFollowing, setIsFollowing] = useState(false);
+
+  const inputRef = useRef<HTMLInputElement>(null); // Ref for chat input
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLDivElement>(null);
@@ -107,7 +111,8 @@ const LiveStream: React.FC = () => {
     });
 
     if (mode === 'buyer' && !isObserver) {
-      updateDoc(doc(db, "live_sessions", id), { viewerCount: increment(1) });
+      updateDoc(doc(db, "live_sessions", id), { viewerCount: increment(1) })
+        .catch(err => console.warn("Failed to update viewer count:", err));
     }
 
     return () => { unsubSession(); unsubHearts(); unsubChat(); cleanupAndExit(); };
@@ -117,7 +122,10 @@ const LiveStream: React.FC = () => {
     if (rtcClient.current) { await rtcClient.current.leave(); rtcClient.current = null; }
     if (localTracks.current.audio) { localTracks.current.audio.stop(); localTracks.current.audio.close(); localTracks.current.audio = null; }
     if (localTracks.current.video) { localTracks.current.video.stop(); localTracks.current.video.close(); localTracks.current.video = null; }
-    if (mode === 'buyer' && !isObserver && id) updateDoc(doc(db, "live_sessions", id), { viewerCount: increment(-1) });
+    if (mode === 'buyer' && !isObserver && id) {
+      updateDoc(doc(db, "live_sessions", id), { viewerCount: increment(-1) })
+        .catch(err => console.warn("Failed to decrement viewer count:", err));
+    }
     if (wasTerminated) alert(mode === 'seller' ? "Identity Node: Broadcast Terminated." : "The live session has ended.");
     if (isObserver) navigate('/admin/live-moderation');
     else if (mode === 'seller') navigate('/vendor');
@@ -160,7 +168,48 @@ const LiveStream: React.FC = () => {
 
   const broadcastHeart = async () => {
     if (!id) return;
-    await addDoc(collection(db, "live_sessions", id, "reactions"), { x: Math.random() * 80 - 40, type: 'heart', createdAt: serverTimestamp() });
+    try {
+      await addDoc(collection(db, "live_sessions", id, "reactions"), { x: Math.random() * 80 - 40, type: 'heart', createdAt: serverTimestamp() });
+    } catch (e) {
+      console.error("Heart error", e); // Catch permission errors silently
+    }
+  };
+
+  const handleFollow = () => {
+    setIsFollowing(!isFollowing);
+    // In real app, call userService.followVendor(vendorId)
+    // toast.success(isFollowing ? "Unfollowed" : "Following!");
+  };
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    const shareData = {
+      title: sessionData?.title || 'Live Sale',
+      text: `Join the live sale: ${sessionData?.title}`,
+      url: url
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (e) {
+        // User cancelled or share failed
+      }
+    } else {
+      // Fallback for non-HTTPS or unsupported browsers
+      try {
+        await navigator.clipboard.writeText(url);
+        alert("Link copied to clipboard!");
+      } catch (e) {
+        prompt("Copy this link:", url);
+      }
+    }
+  };
+
+  const handleAddEmoji = (emoji: string) => {
+    setComment(prev => prev + emoji);
+    setShowEmojiPicker(false);
+    inputRef.current?.focus();
   };
 
   return (
@@ -203,8 +252,11 @@ const LiveStream: React.FC = () => {
             <span className="text-[10px] font-black text-white uppercase tracking-wide truncate max-w-[100px]">{sessionData?.vendorName || "Loading..."}</span>
             <span className="text-[8px] text-gray-300 font-medium">Hargeisa, Somaliland</span>
           </div>
-          <button className="bg-primary text-secondary text-[9px] font-black px-3 py-1.5 rounded-full uppercase ml-2 active:scale-90 transition-transform">
-            Follow
+          <button
+            onClick={handleFollow}
+            className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase ml-2 active:scale-90 transition-transform ${isFollowing ? 'bg-white text-black' : 'bg-primary text-secondary'}`}
+          >
+            {isFollowing ? 'Following' : 'Follow'}
           </button>
         </div>
 
@@ -229,15 +281,15 @@ const LiveStream: React.FC = () => {
           <div className="size-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform group-active:bg-primary/20">
             <span className="material-symbols-outlined text-white text-3xl group-active:text-primary fill-1">favorite</span>
           </div>
-          <span className="text-[10px] font-black text-white shadow-black drop-shadow-md">4.2k</span>
+          <span className="text-[10px] font-black text-white shadow-black drop-shadow-md">Like</span>
         </button>
-        <button className="flex flex-col items-center gap-1">
+        <button onClick={() => inputRef.current?.focus()} className="flex flex-col items-center gap-1">
           <div className="size-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform">
             <span className="material-symbols-outlined text-white text-3xl fill-1">chat_bubble</span>
           </div>
-          <span className="text-[10px] font-black text-white shadow-black drop-shadow-md">128</span>
+          <span className="text-[10px] font-black text-white shadow-black drop-shadow-md">Chat</span>
         </button>
-        <button className="flex flex-col items-center gap-1">
+        <button onClick={handleShare} className="flex flex-col items-center gap-1">
           <div className="size-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform">
             <span className="material-symbols-outlined text-white text-3xl fill-1">share</span>
           </div>
@@ -317,14 +369,24 @@ const LiveStream: React.FC = () => {
         {sessionData?.featuredProductId && (
           <div className="w-full relative pr-14 mt-1">
             <div className="relative w-full">
+              {showEmojiPicker && (
+                <div className="absolute bottom-full right-0 mb-2 p-2 bg-black/80 backdrop-blur-md rounded-2xl flex gap-2 animate-in slide-in-from-bottom-2">
+                  {['❤️', '🔥', '👏', '😂', '😮', '💸'].map(emoji => (
+                    <button key={emoji} onClick={() => handleAddEmoji(emoji)} className="text-xl hover:scale-125 transition-transform">{emoji}</button>
+                  ))}
+                </div>
+              )}
               <input
+                ref={inputRef}
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                 className="w-full h-10 pl-4 pr-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-xs text-white placeholder:text-gray-300 focus:ring-1 focus:ring-primary focus:bg-black/60 transition-all font-medium"
                 placeholder="Ask a question..."
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-300 text-lg">sentiment_satisfied</span>
+              <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="absolute right-1 top-1/2 -translate-y-1/2 size-8 flex items-center justify-center text-gray-300 hover:text-white">
+                <span className="material-symbols-outlined text-lg">sentiment_satisfied</span>
+              </button>
             </div>
           </div>
         )}
@@ -444,6 +506,7 @@ const InStreamCheckout: React.FC<any> = ({ sessionData, onClose, userId, profile
               Authorize Payment
               <span className="material-symbols-outlined font-black">bolt</span>
             </button>
+            <div className="h-8"></div> {/* Increased Bottom Spacing */}
           </div>
         )}
 

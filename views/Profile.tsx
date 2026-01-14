@@ -48,22 +48,28 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
 
   const handleDeleteAccount = async () => {
     if (!user) return;
-    const confirm = window.confirm("CRITICAL WARNING: This will permanently delete your Identity Node and all associated data. This action cannot be undone. Confirm deletion?");
-    if (!confirm) return;
+
+    // Enhanced Security Check: Require explicit input
+    const input = window.prompt("SECURITY CHECK: To permanently delete your account, please type 'DELETE' below.\n\nThis action cannot be undone.");
+
+    if (input !== 'DELETE') {
+      if (input !== null) alert("Incorrect confirmation code. Deletion cancelled.");
+      return;
+    }
 
     try {
       // Delete Firestore Profile
       await deleteDoc(doc(db, "users", user.uid));
       // Delete Auth Account
       await user.delete();
-      alert("Identity Node terminated from the mesh.");
+      alert("Account successfully deleted.");
       navigate('/');
     } catch (err: any) {
       console.error("Deletion Error:", err);
       if (err.code === 'auth/requires-recent-login') {
-        alert("Security Protocol: Re-authentication required. Please sign out and sign in again.");
+        alert("Security Protocol: Re-authentication required. Please sign out and sign in again before deleting your account.");
       } else {
-        alert("Termination failed: " + err.message);
+        alert("Deletion failed: " + err.message);
       }
     }
   };
@@ -273,7 +279,7 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
                 <div className="size-10 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-500 group-hover:text-red-500 transition-colors border border-gray-100 dark:border-white/10 shadow-sm">
                   <span className="material-symbols-outlined text-[22px]">logout</span>
                 </div>
-                <span className="text-sm font-black text-secondary dark:text-white uppercase tracking-tighter leading-none">Terminate Session</span>
+                <span className="text-sm font-black text-secondary dark:text-white uppercase tracking-tighter leading-none">Log Out</span>
               </div>
             </button>
             <button onClick={handleDeleteAccount} className="w-full p-5 flex items-center justify-between hover:bg-red-50 dark:hover:bg-red-900/10 transition-all group">
@@ -281,7 +287,7 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
                 <div className="size-10 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-red-500 border border-red-100 dark:border-red-900/30 shadow-sm">
                   <span className="material-symbols-outlined text-[22px]">delete_forever</span>
                 </div>
-                <span className="text-sm font-black text-red-600 dark:text-red-400 uppercase tracking-tighter leading-none">Delete Identity Node</span>
+                <span className="text-sm font-black text-red-600 dark:text-red-400 uppercase tracking-tighter leading-none">Delete Account</span>
               </div>
             </button>
           </MenuSection>

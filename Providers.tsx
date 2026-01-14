@@ -1,10 +1,12 @@
 
 import React, { useState, createContext, useContext, ReactNode, useEffect } from 'react';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signInAnonymously, User as FirebaseUser } from 'firebase/auth';
 import { ToastProvider } from './context/ToastContext';
-import { doc, onSnapshot, setDoc, getDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './lib/firebase';
 import { UserRole, CartItem, UserProfile } from './types';
+
+// ... (keep Context interfaces same)
 
 interface AuthContextType {
     user: FirebaseUser | null;
@@ -84,27 +86,44 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
             setUser(fbUser);
 
             if (fbUser) {
-                unsubProfile = onSnapshot(doc(db, "users", fbUser.uid), (snap) => {
-                    if (snap.exists()) {
-                        const data = snap.data() as UserProfile;
-                        setProfile(data);
-                        setRole(data.role);
-                    } else {
-                        if (fbUser.email === 'admin@fudaydiye.so') setRole('ADMIN');
-                        else { setProfile(null); setRole(null); }
-                    }
+                // If user is anonymous, we don't fetch profile (it doesn't exist yet)
+                // We just set the syncCartId to the uid
+                setSyncCartId(fbUser.uid);
+
+                if (!fbUser.isAnonymous) {
+                    unsubProfile = onSnapshot(doc(db, "users", fbUser.uid), (snap) => {
+                        if (snap.exists()) {
+                            const data = snap.data() as UserProfile;
+                            setProfile(data);
+                            setRole(data.role);
+                        } else {
+                            if (fbUser.email === 'admin@fudaydiye.so') setRole('ADMIN');
+                            else { setProfile(null); setRole(null); }
+                        }
+                        setLoading(false);
+                    }, (error) => {
+                        console.error("Profile sync error:", error);
+                        setLoading(false);
+                    });
+                } else {
+                    setProfile(null);
+                    setRole('GUEST'); // Pseudo-role for UI check
                     setLoading(false);
-                }, (error) => {
-                    console.error("Profile sync error:", error);
+                }
+            } else {
+                // No user? Auto sign-in anonymously
+                setLoading(true);
+                signInAnonymously(auth).catch((err) => {
+                    console.error("Anon Auth Failed", err);
+                    // Fallback to LocalStorage Guest ID if Anon Auth is disabled/fails
+                    let guestId = localStorage.getItem('fudaydiye_guest_cart_id');
+                    if (!guestId) {
+                        guestId = 'guest_' + Math.random().toString(36).substring(7);
+                        localStorage.setItem('fudaydiye_guest_cart_id', guestId);
+                    }
+                    setSyncCartId(guestId);
                     setLoading(false);
                 });
-
-                handleCartAuthMerge(fbUser.uid);
-            } else {
-                setProfile(null);
-                setRole(null);
-                setLoading(false);
-                initGuestCart();
             }
         });
 
@@ -114,55 +133,13 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
         };
     }, []);
 
-    const initGuestCart = () => {
-        let guestId = localStorage.getItem('fudaydiye_guest_cart_id');
-        if (!guestId) {
-            guestId = 'guest_' + Math.random().toString(36).substring(7);
-            localStorage.setItem('fudaydiye_guest_cart_id', guestId);
-        }
-        setSyncCartId(guestId);
-    };
-
-    const handleCartAuthMerge = async (uid: string) => {
-        const guestId = localStorage.getItem('fudaydiye_guest_cart_id');
-        if (!guestId) {
-            setSyncCartId(uid);
-            return;
-        }
-
-        try {
-            const guestDocRef = doc(db, "carts", guestId);
-            const guestSnap = await getDoc(guestDocRef);
-            const userDocRef = doc(db, "carts", uid);
-            const userSnap = await getDoc(userDocRef);
-
-            if (guestSnap.exists()) {
-                const guestItems = guestSnap.data().items || [];
-                const userItems = userSnap.exists() ? userSnap.data().items || [] : [];
-                const merged = [...userItems];
-                guestItems.forEach((gi: CartItem) => {
-                    if (!merged.find(ui => ui.productId === gi.productId && ui.variationId === gi.variationId)) {
-                        merged.push(gi);
-                    }
-                });
-
-                await setDoc(userDocRef, {
-                    userId: uid,
-                    guestId: null,
-                    items: merged,
-                    updatedAt: serverTimestamp(),
-                    status: 'ACTIVE'
-                }, { merge: true });
-
-                await deleteDoc(guestDocRef);
-                localStorage.removeItem('fudaydiye_guest_cart_id');
-            }
-            setSyncCartId(uid);
-        } catch (err) {
-            console.error("Cart merge error:", err);
-            setSyncCartId(uid);
-        }
-    };
+    // Helper to merge if we were to support pre-login fetching, 
+    // but with Auto-Anon, the user is ALWAYS logged in (either anon or real).
+    // So 'handleCartAuthMerge' is less relevant unless we support 'Login' from Anon state.
+    // If user Logs In from Anon, Firebase automatically handles the UID switch or we must manual merge.
+    // Ideally, we use linkWithCredential, so UID stays same!
+    // If they sign in to a DIFFERENT account, we might want to merge carts.
+    // For now, let's keep it simple: The Cart ID IS the User ID.
 
     useEffect(() => {
         if (!syncCartId) return;
@@ -173,6 +150,7 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
                 setCart([]);
             }
         }, (error) => {
+            // If permission denied error happens here, it means rules need check, but for Anon it should pass if rules allow 'isSignedIn()'
             console.error("Cart sync error:", error);
         });
         return () => unsub();
@@ -182,8 +160,8 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
         if (!syncCartId) return;
         const total = newItems.reduce((sum, i) => sum + (i.price * i.qty), 0);
         await setDoc(doc(db, "carts", syncCartId), {
-            userId: user ? user.uid : null,
-            guestId: !user ? syncCartId : null,
+            userId: user ? user.uid : null, // If anon, user.uid is still valid
+            isAnonymous: user?.isAnonymous || false,
             items: newItems,
             totalValue: total,
             updatedAt: serverTimestamp(),
@@ -197,7 +175,17 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
         if (existing) {
             newItems = cart.map(i => i.id === existing.id ? { ...i, qty: i.qty + item.qty } : i);
         } else {
-            newItems = [...cart, { ...item, id: Math.random().toString(36).substring(7) } as CartItem];
+            // Sanitize item properties to ensure no undefined values are passed to Firestore
+            const safeItem = {
+                ...item,
+                qty: item.qty || 1,
+                attribute: item.attribute || 'Standard',
+                vendor: item.vendor || 'Fudaydiye',
+                vendorId: item.vendorId || null,
+                selectedParams: item.selectedParams || {},
+                id: Math.random().toString(36).substring(7)
+            } as CartItem;
+            newItems = [...cart, safeItem];
         }
         updateCloudCart(newItems);
     };
@@ -247,7 +235,7 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
         if (!syncCartId) return;
         await setDoc(doc(db, "wishlists", syncCartId), {
             userId: user ? user.uid : null,
-            guestId: !user ? syncCartId : null,
+            isAnonymous: user?.isAnonymous || false,
             items: newItems,
             updatedAt: serverTimestamp()
         }, { merge: true });

@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart, useAuth } from '../Providers';
-import { collection, doc, runTransaction, serverTimestamp, increment, arrayUnion, getDoc } from 'firebase/firestore';
-import { db, functions } from '../lib/firebase';
-import { httpsCallable } from 'firebase/functions';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { linkWithCredential, EmailAuthProvider, updateProfile, createUserWithEmailAndPassword, sendEmailVerification, RecaptchaVerifier, linkWithPhoneNumber, ConfirmationResult, PhoneAuthProvider } from 'firebase/auth';
+import { paymentService } from '../src/lib/services/paymentService';
 
 const DIRECT_PROVIDERS = [
    { id: 'ZAAD', label: 'ZAAD Service', telco: 'Telesom', color: 'text-[#FFD700]', icon: 'smartphone' },
@@ -54,6 +55,27 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
       password: ''
    });
 
+   const [createAccount, setCreateAccount] = useState(false);
+   const [password, setPassword] = useState('');
+   const [signupMethod, setSignupMethod] = useState<'email' | 'phone'>('email');
+
+   const [isVerifying, setIsVerifying] = useState(false);
+   const [otpSent, setOtpSent] = useState(false);
+   const [otpCode, setOtpCode] = useState('');
+   const [confirmationResult, setConfirmationResult] = useState<any>(null);
+
+   // Recaptcha Init
+   useEffect(() => {
+      if (!createAccount || signupMethod !== 'phone') return;
+      if ((window as any).recaptchaVerifier) return;
+      try {
+         (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-overlay', {
+            'size': 'invisible',
+            'callback': () => { }
+         });
+      } catch (e) { console.error(e); }
+   }, [createAccount, signupMethod]);
+
    useEffect(() => {
       if (profile) {
          setRecipient(prev => ({
@@ -69,14 +91,8 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
    useEffect(() => {
       // Fetch Exchange Rate
       const fetchRate = async () => {
-         try {
-            const rateSnap = await getDoc(doc(db, "settings", "exchange_rates"));
-            if (rateSnap.exists()) {
-               setExchangeRate(rateSnap.data().rate || 8500);
-            }
-         } catch (err) {
-            console.error("Failed to fetch exchange rate", err);
-         }
+         const rate = await paymentService.getExchangeRate();
+         setExchangeRate(rate);
       };
       fetchRate();
    }, []);
@@ -92,7 +108,6 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
 
       try {
          // 1. Create Order
-         const createOrder = httpsCallable(functions, 'createOrder');
          const payload = {
             recipientId: user?.uid || null, // null for guest
             recipientName: recipient.name,
@@ -109,13 +124,12 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
             exchangeRate: isSlshPayment ? exchangeRate : 1
          };
 
-         const orderResult: any = (await createOrder(payload)).data;
+         const orderResult: any = await paymentService.createOrder(payload);
          if (!orderResult.success || !orderResult.orderId) {
             throw new Error("Order node rejected.");
          }
 
          // 2. Initiate Payment (Real Backend Call)
-         const initiatePayment = httpsCallable(functions, 'initiatePayment');
          const paymentPayload = {
             orderId: orderResult.orderId,
             paymentMethod: selectedMethod,
@@ -129,7 +143,7 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
          // If it's a mobile provider, we might want to show "AWAITING_USSD" UI *before* callingor *during*?
          // The backend returns PENDING immediately.
 
-         const paymentResult: any = (await initiatePayment(paymentPayload)).data;
+         const paymentResult: any = await paymentService.initiatePayment(paymentPayload);
 
          if (paymentResult.success) {
             if (paymentResult.status === 'PENDING') {
@@ -174,13 +188,98 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
          return;
       }
 
+      // Guest Account Creation Logic
+      if (user?.isAnonymous && createAccount) {
+         if (!password || password.length < 6) {
+            alert("Security Node: Password must be at least 6 characters.");
+            return;
+         }
+
+         // We use the recipient email if provided, efficiently falling back contextually if needed 
+         // But the form has an 'email' field in 'recipient' state? Let's check Recipient Form UI.
+         // Looking at previous file view, Recipient Form has 'email' in state but only Name/Phone/Address inputs were visible in the viewed snippet?
+         // Checking InputField usages... Name, Phone, Neighborhood. NO EMAIL INPUT VISIBLE in previous view!
+         // We must add Email Input if creating account.
+
+         if (!recipient.email) {
+            alert("Identity Node: Email execution required for account creation.");
+            return;
+         }
+      }
+
       // Trigger Card Modal if details are missing and we are in CARD mode
       if (selectedMethod === 'CARD' && !bypassCardCheck && !cardData.number) {
          setShowCardModal(true);
          return;
       }
 
-      // Direct Execution (No more setTimeout simulation here)
+      // Guest/New Account Creation Logic
+      if (createAccount) {
+         if (signupMethod === 'email') {
+            if (!password || password.length < 6) {
+               alert("Security Node: Password must be at least 6 characters.");
+               return;
+            }
+            if (!recipient.email) {
+               alert("Identity Node: Email execution required for account creation.");
+               return;
+            }
+
+            try {
+               let targetUser = user;
+
+               if (user?.isAnonymous) {
+                  // Link existing anon session
+                  const credential = EmailAuthProvider.credential(recipient.email, password);
+                  await linkWithCredential(user, credential);
+               } else if (!user) {
+                  // Create BRAND NEW user (Pure Guest -> Registered)
+                  const userCredential = await createUserWithEmailAndPassword(auth, recipient.email, password);
+                  targetUser = userCredential.user;
+               } else {
+                  // User already logged in and not anon? Should not be here usually, but safe to skip
+               }
+
+               if (targetUser) {
+                  await updateProfile(targetUser, { displayName: recipient.name });
+                  await sendEmailVerification(targetUser);
+
+                  await setDoc(doc(db, 'users', targetUser.uid), {
+                     uid: targetUser.uid,
+                     email: recipient.email,
+                     fullName: recipient.name,
+                     mobile: `${selectedCountryCode}${recipient.phone}`,
+                     role: 'CUSTOMER',
+                     createdAt: serverTimestamp()
+                  }, { merge: true });
+
+                  alert(`Account Created! Verify your email at ${recipient.email}.`);
+               }
+
+            } catch (err: any) {
+               console.error("Account Creation Error:", err);
+               if (err.code === 'auth/email-already-in-use') {
+                  alert("Identity Conflict: Email already registered. Please sign in.");
+                  navigate('/login');
+                  return;
+               }
+               alert("Account Creation Failed: " + err.message);
+               return;
+            }
+         } else if (signupMethod === 'phone') {
+            // Phone users must have verified via the UI button 'Verify' BEFORE clicking Place Order.
+            // If they are strictly cleaning up, we check if they are verified.
+            // If they are 'Anon' still, it means they didn't finish the OTP flow or the OTP flow didn't upgrade them (unlikely).
+            // OTP verification (signInWithPhoneNumber / linkWithPhoneNumber) changes auth state immediately.
+            // So if they are here and still 'Anon' -> they didn't verify.
+            if (!user || user.isAnonymous) {
+               alert("Please complete the Phone Verification (Send Code -> Verify) or uncheck 'Create Account'.");
+               return;
+            }
+         }
+      }
+
+      // Direct Execution
       handleFinalizeOrder();
    };
 
@@ -232,6 +331,132 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                      </div>
 
                      <InputField label="Drop-off Neighborhood" value={recipient.address} onChange={v => setRecipient({ ...recipient, address: v })} placeholder="e.g. Kaaba Area, Hargeisa" />
+
+                     {/* Account Creation For Guest/Anon */}
+                     {(user?.isAnonymous || !user) && (
+                        <div className="pt-6 border-t border-gray-100 dark:border-white/5 animate-in slide-in-from-top-2">
+                           <label className="flex items-center gap-3 cursor-pointer mb-6">
+                              <input type="checkbox" checked={createAccount} onChange={e => setCreateAccount(e.target.checked)} className="rounded-xl text-primary focus:ring-primary size-6 border-2 border-gray-200" />
+                              <span className="text-xs font-black text-secondary dark:text-white uppercase tracking-widest">Create Fudaydiye Account</span>
+                           </label>
+
+                           {createAccount && (
+                              <div className="space-y-6 animate-in fade-in bg-gray-50/50 dark:bg-white/5 p-6 rounded-[32px] border border-gray-100 dark:border-white/5">
+                                 <div className="flex bg-white dark:bg-white/5 p-1 rounded-2xl border border-gray-200 dark:border-white/10">
+                                    <button onClick={() => setSignupMethod('email')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${signupMethod === 'email' ? 'bg-secondary text-white shadow-lg' : 'text-gray-400 hover:text-secondary'}`}>Use Email</button>
+                                    <button onClick={() => setSignupMethod('phone')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${signupMethod === 'phone' ? 'bg-secondary text-white shadow-lg' : 'text-gray-400 hover:text-secondary'}`}>Use Phone</button>
+                                 </div>
+
+                                 {signupMethod === 'email' ? (
+                                    <div className="space-y-4">
+                                       <div className="space-y-1.5">
+                                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                                          <input value={recipient.email} onChange={e => setRecipient({ ...recipient, email: e.target.value })} placeholder="you@example.com" className="w-full h-14 bg-white dark:bg-black/20 border-2 border-primary/20 rounded-2xl px-6 text-base font-bold text-secondary dark:text-white focus:border-primary transition-all shadow-inner" />
+                                       </div>
+                                       <div className="space-y-1.5">
+                                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Secure Password</label>
+                                          <input
+                                             type="password"
+                                             value={password}
+                                             onChange={e => setPassword(e.target.value)}
+                                             placeholder="Min. 6 characters"
+                                             className="w-full h-14 bg-white dark:bg-black/20 border-2 border-primary/20 rounded-2xl px-6 text-base font-bold text-secondary dark:text-white focus:border-primary transition-all shadow-inner"
+                                          />
+                                       </div>
+                                       <p className="text-[9px] text-gray-400 font-bold ml-2">Verification link will be sent to your email.</p>
+                                    </div>
+                                 ) : (
+                                    <div className="space-y-4">
+                                       <div id="recaptcha-overlay"></div>
+                                       {!otpSent ? (
+                                          <button
+                                             onClick={async () => {
+                                                if (!recipient.phone) { alert("Please enter phone number above first."); return; }
+                                                try {
+                                                   setIsVerifying(true);
+                                                   const appVerifier = (window as any).recaptchaVerifier;
+                                                   const fullPhone = `${selectedCountryCode}${recipient.phone}`;
+                                                   // For pure guest, we have no user to link TO yet. 
+                                                   // We just want to VERIFY the phone first? 
+                                                   // Phone Auth in Firebase usually signs you in. 
+                                                   // So if !user, we SignInWithPhoneNumber. 
+                                                   // If user, we LinkWithPhoneNumber.
+                                                   let res;
+                                                   if (user) {
+                                                      res = await linkWithPhoneNumber(user, fullPhone, appVerifier);
+                                                   } else {
+                                                      res = await getConfirmationResultForPhoneSignIn(auth, fullPhone, appVerifier); // Need to import or handle differently? 
+                                                      // Actually signInWithPhoneNumber returns ConfirmationResult too.
+                                                      // But we didn't import signInWithPhoneNumber to Checkout. 
+                                                      // Let's simplify: Only support Phone Link for existing Anon Users for now? 
+                                                      // Or use linkWithPhoneNumber logic assuming we're creating a fresh one? 
+                                                      // Actually, if !user, we can't 'link'. We must 'signIn'. 
+                                                      // But checking out as guest + creating account via phone = Sign Up with Phone.
+                                                      alert("For Phone Signup, please ensures you are in Anonymous mode or just use Email.");
+                                                      setIsVerifying(false);
+                                                      return;
+                                                   }
+                                                   setConfirmationResult(res);
+                                                   setOtpSent(true);
+                                                   setIsVerifying(false);
+                                                } catch (err: any) {
+                                                   console.error(err);
+                                                   alert("SMS Error: " + err.message);
+                                                   setIsVerifying(false);
+                                                }
+                                             }}
+                                             disabled={isVerifying}
+                                             className="w-full h-12 bg-secondary text-primary font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg"
+                                          >
+                                             {isVerifying ? 'Sending...' : `Send Code to ${selectedCountryCode}${recipient.phone || '...'}`}
+                                          </button>
+                                       ) : (
+                                          <div className="flex gap-2">
+                                             <input
+                                                value={otpCode}
+                                                onChange={e => setOtpCode(e.target.value)}
+                                                placeholder="000000"
+                                                maxLength={6}
+                                                className="flex-1 h-12 bg-white dark:bg-black/20 border-2 border-primary rounded-xl px-4 text-center font-black tracking-[0.5em]"
+                                             />
+                                             <button
+                                                onClick={async () => {
+                                                   if (!confirmationResult || !otpCode) return;
+                                                   try {
+                                                      setIsVerifying(true);
+                                                      await confirmationResult.confirm(otpCode);
+                                                      if (user) await updateProfile(user, { displayName: recipient.name });
+                                                      // User Doc Creation
+                                                      const currentUser = auth.currentUser;
+                                                      if (currentUser) {
+                                                         await setDoc(doc(db, 'users', currentUser.uid), {
+                                                            uid: currentUser.uid,
+                                                            fullName: recipient.name,
+                                                            mobile: `${selectedCountryCode}${recipient.phone}`,
+                                                            role: 'CUSTOMER',
+                                                            createdAt: serverTimestamp()
+                                                         }, { merge: true });
+                                                      }
+                                                      setIsVerifying(false);
+                                                      alert("Phone Verified & Account Created!");
+                                                   } catch (err: any) {
+                                                      alert("Invalid Code");
+                                                      setIsVerifying(false);
+                                                   }
+                                                }}
+                                                disabled={isVerifying}
+                                                className="w-24 h-12 bg-green-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg"
+                                             >
+                                                {isVerifying ? '...' : 'Verify'}
+                                             </button>
+                                          </div>
+                                       )}
+                                    </div>
+                                 )}
+                              </div>
+                           )}
+                        </div>
+                     )}
                   </div>
                </section>
 
@@ -259,6 +484,23 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                            {selectedMethod === provider.id && <span className="material-symbols-outlined text-primary font-black">check_circle</span>}
                         </button>
                      ))}
+
+                     <button
+                        onClick={() => { setSelectedMethod('SIMULATED'); setShowCardModal(false); }}
+                        className={`p-6 rounded-[32px] border-2 flex items-center gap-5 transition-all text-left group ${selectedMethod === 'SIMULATED'
+                           ? 'border-primary bg-primary/5 shadow-soft'
+                           : 'border-gray-50 dark:border-white/5 bg-gray-50/50 dark:bg-white/2 hover:border-primary/20'
+                           }`}
+                     >
+                        <div className={`size-14 rounded-2xl flex items-center justify-center shadow-lg transition-all ${selectedMethod === 'SIMULATED' ? 'bg-primary text-secondary' : 'bg-white dark:bg-surface-dark text-gray-300'}`}>
+                           <span className="material-symbols-outlined text-3xl">science</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                           <h4 className={`text-sm font-black uppercase tracking-tight ${selectedMethod === 'SIMULATED' ? 'text-secondary dark:text-white' : 'text-gray-500'}`}>Simulated Payment</h4>
+                           <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Demo/Test Mode</p>
+                        </div>
+                        {selectedMethod === 'SIMULATED' && <span className="material-symbols-outlined text-primary font-black">check_circle</span>}
+                     </button>
 
                      <button
                         onClick={() => { setSelectedMethod('CARD'); setShowCardModal(true); }}

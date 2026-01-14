@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth, useCart, useWishlist } from '../Providers';
 import { doc, getDoc, collection, query, where, limit, getDocs, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { useToast } from '../components/Toast';
 import { Product, ProductVariation } from '../types';
 
 interface ReviewNode {
@@ -22,6 +23,7 @@ const ProductDetails: React.FC = () => {
   const { addToCart } = useCart();
   const { user, profile } = useAuth();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
+  const { showToast } = useToast();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,12 +150,26 @@ const ProductDetails: React.FC = () => {
           text: `Check out ${product.name} on Fudaydiye`,
           url: window.location.href,
         });
-      } catch (err) {
-        console.log('Error sharing:', err);
+        // Note: Some browsers don't resolve the promise on success, or resolve it even if cancelled.
+        // But if it throws usage of 'AbortError', we know it was cancelled.
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.log('Share failed:', err);
+          fallbackCopyToClipboard();
+        }
       }
     } else {
+      fallbackCopyToClipboard();
+    }
+  };
+
+  const fallbackCopyToClipboard = async () => {
+    try {
       await navigator.clipboard.writeText(window.location.href);
-      alert('Link copied to clipboard!');
+      showToast('Link copied to clipboard', 'SUCCESS');
+    } catch (err) {
+      console.error('Clipboard failed', err);
+      showToast('Could not copy link to clipboard', 'ERROR');
     }
   };
 

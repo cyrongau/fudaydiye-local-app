@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "mobile:build": "npm run build && npx cap sync",
     "mobile:android": "npm run mobile:build && npx cap open android",
-    "mobile:run": "npm run mobile:build && npx cap run android"
+    "mobile:run": "npm run mobile:build && npx cap run android",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
@@ -24,10 +25,15 @@
     "agora-rtc-sdk-ng": "^4.24.2",
     "class-validator": "^0.14.3",
     "firebase": "^12.7.0",
+    "html2canvas": "^1.4.1",
+    "html5-qrcode": "^2.3.8",
+    "jspdf": "^4.0.0",
     "papaparse": "^5.5.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-router-dom": "^7.11.0"
+    "react-router-dom": "^7.11.0",
+    "sonner": "^2.0.7",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

@@ -28,6 +28,7 @@ const ADMIN_ITEMS: SidebarItem[] = [
 
 const VENDOR_ITEMS: SidebarItem[] = [
   { icon: 'grid_view', path: '/vendor', label: 'Command Center' },
+  { icon: 'videocam', path: '/vendor/live-sessions', label: 'Live Sessions' },
   { icon: 'receipt_long', path: '/vendor/orders', label: 'Fulfillment' },
   { icon: 'inventory_2', path: '/vendor/management', label: 'Catalog' },
   { icon: 'inventory', path: '/vendor/inventory', label: 'Stock Logic' },

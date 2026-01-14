@@ -8,6 +8,51 @@ import { Product, CMSContent, CategoryNode, LiveSaleSession, UserProfile } from 
 import VendorTicker from '../components/VendorTicker';
 import CategoryRail from '../components/CategoryRail';
 
+const useAutoScroll = (ref: React.RefObject<HTMLDivElement>, intervalMs = 3000, scrollAmount = 300) => {
+   useEffect(() => {
+      const el = ref.current;
+      if (!el) return;
+
+      let interval: NodeJS.Timeout;
+      let isPaused = false;
+
+      const start = () => {
+         interval = setInterval(() => {
+            if (!el || isPaused) return;
+
+            // Check if we are at the end (with small tolerance)
+            const isAtEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 10;
+
+            if (isAtEnd) {
+               el.scrollTo({ left: 0, behavior: 'smooth' });
+            } else {
+               el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+            }
+         }, intervalMs);
+      };
+
+      const pause = () => { isPaused = true; };
+      const resume = () => { isPaused = false; };
+
+      el.addEventListener('mouseenter', pause);
+      el.addEventListener('mouseleave', resume);
+      el.addEventListener('touchstart', pause);
+      el.addEventListener('touchend', resume);
+
+      start();
+
+      return () => {
+         clearInterval(interval);
+         if (el) {
+            el.removeEventListener('mouseenter', pause);
+            el.removeEventListener('mouseleave', resume);
+            el.removeEventListener('touchstart', pause);
+            el.removeEventListener('touchend', resume);
+         }
+      };
+   }, [ref, intervalMs, scrollAmount]);
+};
+
 const WebCustomerHome: React.FC = () => {
 
    const navigate = useNavigate();
@@ -26,6 +71,16 @@ const WebCustomerHome: React.FC = () => {
 
    const [mobileAds, setMobileAds] = useState<CMSContent[]>([]);
    const [promoCards, setPromoCards] = useState<CMSContent[]>([]);
+
+   // Refs for auto-scrolling
+   const promoRef1 = React.useRef<HTMLDivElement>(null);
+   const promoRef2 = React.useRef<HTMLDivElement>(null);
+   const catRef = React.useRef<HTMLDivElement>(null);
+
+   // Apply auto-scroll (slower for categories, faster snap for cards)
+   useAutoScroll(catRef, 4000, 200);
+   useAutoScroll(promoRef1, 5000, 300); // 300px approximation or rely on snap behavior
+   useAutoScroll(promoRef2, 6000, 300);
 
    // 1. Static Content Subscriptions (Run Once)
    useEffect(() => {
@@ -61,8 +116,8 @@ const WebCustomerHome: React.FC = () => {
          setPromoCards(allCards);
       }, (err) => console.error("Promos Sync Error:", err));
 
-      // Sync Featured Node
-      const unsubFeatured = onSnapshot(query(collection(db, "live_sessions"), where("isFeatured", "==", true), limit(1)), (snap) => {
+      // Sync Featured Node (Only LIVE or SCHEDULED)
+      const unsubFeatured = onSnapshot(query(collection(db, "live_sessions"), where("isFeatured", "==", true), where("status", "in", ["LIVE", "SCHEDULED"]), limit(1)), (snap) => {
          if (!snap.empty) setFeaturedLive({ id: snap.docs[0].id, ...snap.docs[0].data() } as LiveSaleSession);
          else setFeaturedLive(null);
       }, (err) => console.error("Featured Live Error:", err));
@@ -117,9 +172,15 @@ const WebCustomerHome: React.FC = () => {
       // return () => unsubProd(); // No unsubscribe needed for getDocs
    }, [activeTab]);
 
+   const STATIC_SLIDES = [
+      { id: 's1', title: 'Fudaydiye', subtitle: 'Commerce Reimagined', featuredImage: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=1200', category: 'Welcome', ctaText: 'Start Shopping', ctaLink: '/customer/explore' },
+      { id: 's2', title: 'New Arrivals', subtitle: 'Check out the latest trends', featuredImage: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=1200', category: 'Fresh', ctaText: 'View Collection', ctaLink: '/customer/category/fashion' }
+   ];
+
    useEffect(() => {
-      if (heroSlides.length > 1) {
-         const timer = setInterval(() => setActiveHero(prev => (prev + 1) % heroSlides.length), 10000);
+      const slideCount = heroSlides.length > 0 ? heroSlides.length : STATIC_SLIDES.length;
+      if (slideCount > 1) {
+         const timer = setInterval(() => setActiveHero(prev => (prev + 1) % slideCount), 5000);
          return () => clearInterval(timer);
       }
    }, [heroSlides]);
@@ -182,8 +243,9 @@ const WebCustomerHome: React.FC = () => {
             {/* Mobile Optimized Hero Section */}
             <div className="md:hidden px-4 pt-4 space-y-4">
                {/* Priority 1: Featured Live Session (Live Now) */}
-               {featuredLive && (
-                  <div onClick={() => navigate(`/customer/live/${featuredLive.id}`)} className="rounded-[24px] bg-[#015754] p-5 flex flex-col relative overflow-hidden text-white shadow-2xl cursor-pointer border border-white/10">
+               {/* Priority 1: Featured LIVE Session */}
+               {featuredLive && featuredLive.status === 'LIVE' && (
+                  <div onClick={() => navigate(`/customer/live/${featuredLive.id}`)} className="rounded-[24px] bg-[#015754] p-5 flex flex-col relative overflow-hidden text-white shadow-2xl cursor-pointer border border-white/10 animate-in fade-in zoom-in duration-500">
                      <div className="absolute inset-0">
                         <img src={featuredLive.featuredProductImg || featuredLive.hostAvatar} className="w-full h-full object-cover opacity-40 mix-blend-overlay" alt="" />
                         <div className="absolute inset-0 bg-gradient-to-t from-[#015754] via-[#015754]/80 to-transparent"></div>
@@ -208,56 +270,65 @@ const WebCustomerHome: React.FC = () => {
                   </div>
                )}
 
-               {/* Priority 2: Scheduled Live Session (If no Live Now) */}
-               {!featuredLive && scheduledSessions.length > 0 && (
-                  <div className="rounded-[24px] bg-[#2A0A18] p-5 relative overflow-hidden text-white shadow-xl">
-                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-                     <div className="relative z-10">
-                        <span className="bg-white/10 text-white border border-white/10 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest mb-3 inline-block">Upcoming Event</span>
-                        <h2 className="text-xl font-black leading-tight mb-1">{scheduledSessions[0].title}</h2>
-                        <p className="text-[10px] opacity-70 uppercase tracking-widest mb-4">
-                           {new Date(scheduledSessions[0].scheduledAt?.seconds * 1000).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} • {scheduledSessions[0].vendorName}
-                        </p>
-                        <button className="bg-white text-[#2A0A18] text-[10px] font-black px-5 py-2.5 rounded-xl uppercase tracking-wider w-full flex items-center justify-center gap-2">
-                           <span className="material-symbols-outlined text-[14px]">notifications_active</span> Notify Me
-                        </button>
-                     </div>
-                  </div>
+               {/* Priority 2: Scheduled Live Session (Featured OR Next Scheduled) */}
+               {(!featuredLive || featuredLive.status !== 'LIVE') && (featuredLive?.status === 'SCHEDULED' || scheduledSessions.length > 0) && (
+                  <ScheduledBanner session={featuredLive?.status === 'SCHEDULED' ? featuredLive : scheduledSessions[0]} />
                )}
 
-               {/* Priority 3: Hero CMS Slider (Fallback if no Live/Scheduled) */}
-               {!featuredLive && scheduledSessions.length === 0 && heroSlides.length > 0 && (
-                  <div className="rounded-[24px] bg-secondary p-6 text-white relative overflow-hidden shadow-lg h-[200px] flex flex-col justify-center" onClick={() => navigate(heroSlides[0].ctaLink || '/customer/explore')}>
-                     <img src={heroSlides[0].featuredImage} className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay" alt="" />
-                     <div className="absolute inset-0 bg-gradient-to-r from-secondary via-secondary/80 to-transparent"></div>
-                     <div className="relative z-10 max-w-[80%]">
-                        <span className="bg-primary text-secondary text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider mb-2 inline-block shadow-lg">{heroSlides[0].category}</span>
-                        <h2 className="text-2xl font-black leading-none mb-2 text-white uppercase tracking-tight">{heroSlides[0].title}</h2>
-                        <button className="bg-white text-secondary text-[10px] font-black px-5 py-2 rounded-xl uppercase tracking-widest mt-2 hover:bg-primary transition-colors">{heroSlides[0].ctaText || 'Explore'}</button>
-                     </div>
+               {/* Priority 3: Hero CMS Slider (Fallback if no active/scheduled live) */}
+               {(!featuredLive || featuredLive.status === 'ENDED') && scheduledSessions.length === 0 && (
+                  <div className="rounded-[24px] bg-secondary p-6 text-white relative overflow-hidden shadow-lg h-[200px] flex flex-col justify-center transition-all duration-500" onClick={() => navigate((heroSlides.length > 0 ? heroSlides : STATIC_SLIDES)[activeHero % (heroSlides.length || STATIC_SLIDES.length)].ctaLink || '/customer/explore')}>
+                     {(() => {
+                        const slides = heroSlides.length > 0 ? heroSlides : STATIC_SLIDES;
+                        const slide = slides[activeHero % slides.length];
+                        return (
+                           <>
+                              <img key={slide.id} src={slide.featuredImage} className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay animate-in fade-in duration-1000" alt="" />
+                              <div className="absolute inset-0 bg-gradient-to-r from-secondary via-secondary/80 to-transparent"></div>
+                              <div className="relative z-10 max-w-[80%] animate-in slide-in-from-right-4 duration-500 key={slide.id}">
+                                 <span className="bg-primary text-secondary text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider mb-2 inline-block shadow-lg">{slide.category || 'Welcome'}</span>
+                                 <h2 className="text-2xl font-black leading-none mb-2 text-white uppercase tracking-tight line-clamp-2">{slide.title}</h2>
+                                 <button className="bg-white text-secondary text-[10px] font-black px-5 py-2 rounded-xl uppercase tracking-widest mt-2 hover:bg-primary transition-colors">{slide.ctaText || 'Explore'}</button>
+                              </div>
+
+                              {/* Slide Indicators */}
+                              {slides.length > 1 && (
+                                 <div className="absolute bottom-4 right-4 flex gap-1.5">
+                                    {slides.map((_, i) => (
+                                       <div key={i} className={`h-1 rounded-full transition-all duration-300 ${i === (activeHero % slides.length) ? 'w-4 bg-primary' : 'w-1.5 bg-white/20'}`} />
+                                    ))}
+                                 </div>
+                              )}
+                           </>
+                        );
+                     })()}
                   </div>
                )}
             </div>
 
             {/* Dynamic Promo Cards Section */}
-            <section className="py-6 md:py-12 px-6 max-w-7xl mx-auto flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6">
-               {promoCards.length > 0 ? (
-                  promoCards.map((card, idx) => (
-                     <div key={card.id} className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center">
-                        <PromoBanner
-                           title={card.title}
-                           promo={card.subtitle}
-                           img={card.featuredImage}
-                           tag={card.category}
-                           orange={idx % 2 !== 0} // Simple alternating style
-                           link={card.ctaLink}
-                        />
-                     </div>
-                  ))
-               ) : (
-                  // Fallback / Skeleton or hide if no content
-                  <div className="hidden"></div>
-               )}
+            <section className="py-6 md:py-12 w-full">
+               <div className="max-w-7xl mx-auto px-6">
+                  <div ref={promoRef1} className="-mx-6 px-6 md:mx-0 md:px-0 flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6 w-full md:w-auto">
+                     {promoCards.length > 0 ? (
+                        promoCards.map((card, idx) => (
+                           <div key={card.id} className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center">
+                              <PromoBanner
+                                 title={card.title}
+                                 promo={card.subtitle}
+                                 img={card.featuredImage}
+                                 tag={card.category}
+                                 orange={idx % 2 !== 0} // Simple alternating style
+                                 link={card.ctaLink}
+                              />
+                           </div>
+                        ))
+                     ) : (
+                        // Fallback / Skeleton or hide if no content
+                        <div className="hidden"></div>
+                     )}
+                  </div>
+               </div>
             </section>
 
          </section >
@@ -401,49 +472,56 @@ const WebCustomerHome: React.FC = () => {
          </section>
 
          {/* Taxonomy Strip */}
-         <section className="py-8 md:py-20 px-6">
-            <div className="max-w-7xl mx-auto text-center mb-6 md:mb-12">
+         <section className="py-8 md:py-20 w-full">
+            <div className="max-w-7xl mx-auto px-6 text-center mb-6 md:mb-12">
                <h2 className="text-3xl md:text-5xl font-black text-secondary dark:text-white uppercase tracking-tighter">Browse Hubs</h2>
                <div className="h-1 w-20 bg-primary mx-auto mt-4 rounded-full"></div>
             </div>
-            <div className="max-w-7xl mx-auto flex flex-nowrap overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 gap-6 md:gap-12 px-6 -mx-6 md:mx-auto md:justify-center md:flex-wrap justify-start">
-               {categories.map((cat) => (
-                  <button key={cat.id} onClick={() => navigate(`/customer/category/${cat.name.toLowerCase()}`)} className="flex flex-col items-center gap-4 group shrink-0 snap-center">
-                     <div className="size-20 md:size-28 rounded-full bg-primary/10 flex items-center justify-center border-2 border-transparent group-hover:border-primary group-hover:shadow-primary-glow transition-all relative overflow-hidden">
-                        {cat.imageUrl ? <img src={cat.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-20 grayscale group-hover:grayscale-0 group-hover:opacity-40 transition-all" /> : <div className="absolute inset-0 bg-primary opacity-5"></div>}
-                        <span className="material-symbols-outlined text-[32px] md:text-[42px] text-primary group-hover:scale-110 transition-transform relative z-10">{cat.icon || 'category'}</span>
-                     </div>
-                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 group-hover:text-primary transition-colors">{cat.name}</span>
-                  </button>
-               ))}
+
+            <div className="max-w-7xl mx-auto px-6">
+               <div className="-mx-6 px-6 md:mx-0 md:px-0 flex flex-nowrap overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 gap-6 md:gap-12 md:flex-wrap md:justify-center justify-start">
+                  {categories.map((cat) => (
+                     <button key={cat.id} onClick={() => navigate(`/customer/category/${cat.name.toLowerCase()}`)} className="flex flex-col items-center gap-4 group shrink-0 snap-center min-w-[80px]">
+                        <div className="size-20 md:size-28 rounded-full bg-primary/10 flex items-center justify-center border-2 border-transparent group-hover:border-primary group-hover:shadow-primary-glow transition-all relative overflow-hidden">
+                           {cat.imageUrl ? <img src={cat.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-20 grayscale group-hover:grayscale-0 group-hover:opacity-40 transition-all" /> : <div className="absolute inset-0 bg-primary opacity-5"></div>}
+                           <span className="material-symbols-outlined text-[32px] md:text-[42px] text-primary group-hover:scale-110 transition-transform relative z-10">{cat.icon || 'category'}</span>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 group-hover:text-primary transition-colors whitespace-nowrap">{cat.name}</span>
+                     </button>
+                  ))}
+               </div>
             </div>
          </section>
 
          {/* Restored Category Banner Ads Section */}
-         <section className="py-6 md:py-12 px-6 max-w-7xl mx-auto flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6">
-            {(() => {
-               const topCards = promoCards.filter(c => c.section === 'HOME_TOP_ROW' || !c.section).slice(0, 3);
-               return topCards.length > 0 ? (
-                  topCards.map((card, idx) => (
-                     <div key={card.id} className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center">
-                        <PromoBanner
-                           title={card.title}
-                           promo={card.subtitle}
-                           img={card.featuredImage}
-                           tag={card.category}
-                           orange={idx % 2 !== 0}
-                           link={card.ctaLink}
-                        />
-                     </div>
-                  ))
-               ) : (
-                  <>
-                     <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Smart Tech" promo="Up to 40% Off" img="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=1200" tag="Electronics Hub" link="/customer/category/electronics" /></div>
-                     <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Luxe Beauty" promo="New Arrivals" img="https://images.unsplash.com/photo-1596462502278-27bfad4575a6?q=80&w=1200" tag="Cosmetic Node" orange link="/customer/category/beauty" /></div>
-                     <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Home Living" promo="Free Shipping" img="https://images.unsplash.com/photo-1484101403633-562f891dc89a?q=80&w=1200" tag="Interior Mesh" link="/customer/category/home" /></div>
-                  </>
-               );
-            })()}
+         <section className="py-6 md:py-12 w-full">
+            <div className="max-w-7xl mx-auto px-6">
+               <div className="-mx-6 px-6 md:mx-0 md:px-0 flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6">
+                  {(() => {
+                     const topCards = promoCards.filter(c => c.section === 'HOME_TOP_ROW' || !c.section).slice(0, 3);
+                     return topCards.length > 0 ? (
+                        topCards.map((card, idx) => (
+                           <div key={card.id} className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center">
+                              <PromoBanner
+                                 title={card.title}
+                                 promo={card.subtitle}
+                                 img={card.featuredImage}
+                                 tag={card.category}
+                                 orange={idx % 2 !== 0}
+                                 link={card.ctaLink}
+                              />
+                           </div>
+                        ))
+                     ) : (
+                        <>
+                           <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Smart Tech" promo="Up to 40% Off" img="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=1200" tag="Electronics Hub" link="/customer/category/electronics" /></div>
+                           <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Luxe Beauty" promo="New Arrivals" img="https://images.unsplash.com/photo-1596462502278-27bfad4575a6?q=80&w=1200" tag="Cosmetic Node" orange link="/customer/category/beauty" /></div>
+                           <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Home Living" promo="Free Shipping" img="https://images.unsplash.com/photo-1484101403633-562f891dc89a?q=80&w=1200" tag="Interior Mesh" link="/customer/category/home" /></div>
+                        </>
+                     );
+                  })()}
+               </div>
+            </div>
          </section>
 
          {/* Main Feed */}
@@ -580,6 +658,51 @@ const HeroProductCard: React.FC<{ productId: string }> = ({ productId }) => {
                className="w-full h-10 bg-primary text-secondary rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-secondary hover:text-white transition-colors flex items-center justify-center gap-2"
             >
                Add to Cart <span className="material-symbols-outlined text-[14px]">shopping_cart</span>
+            </button>
+         </div>
+      </div>
+   );
+};
+const ScheduledBanner = ({ session }: { session: LiveSaleSession }) => {
+   const [timer, setTimer] = useState("");
+
+   useEffect(() => {
+      if (!session.scheduledAt) return;
+      const target = new Date(session.scheduledAt.seconds * 1000).getTime();
+      const interval = setInterval(() => {
+         const now = new Date().getTime();
+         const dist = target - now;
+         if (dist < 0) {
+            setTimer("Starting Soon");
+            return;
+         }
+         const d = Math.floor(dist / (1000 * 60 * 60 * 24));
+         const h = Math.floor((dist % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+         const m = Math.floor((dist % (1000 * 60 * 60)) / (1000 * 60));
+         const s = Math.floor((dist % (1000 * 60)) / 1000);
+         setTimer(`${d > 0 ? d + 'd ' : ''}${h}h ${m}m ${s}s`);
+      }, 1000);
+      return () => clearInterval(interval);
+   }, [session]);
+
+   return (
+      <div className="rounded-[24px] bg-[#2A0A18] p-5 relative overflow-hidden text-white shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-700">
+         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+         <div className="absolute inset-0 bg-gradient-to-r from-purple-900/40 to-transparent mix-blend-overlay"></div>
+         <div className="relative z-10">
+            <div className="flex justify-between items-start mb-3">
+               <span className="bg-white/10 text-white border border-white/10 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest inline-block">Upcoming Event</span>
+               <div className="bg-white/20 px-2 py-1 rounded-lg backdrop-blur text-[10px] font-black font-mono tracking-widest shadow-inner">
+                  {timer || "Loading..."}
+               </div>
+            </div>
+
+            <h2 className="text-xl font-black leading-tight mb-1">{session.title}</h2>
+            <p className="text-[10px] opacity-70 uppercase tracking-widest mb-4">
+               {new Date(session.scheduledAt!.seconds * 1000).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} • {session.vendorName}
+            </p>
+            <button className="bg-white text-[#2A0A18] text-[10px] font-black px-5 py-2.5 rounded-xl uppercase tracking-wider w-full flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors">
+               <span className="material-symbols-outlined text-[14px]">notifications_active</span> Remind Me
             </button>
          </div>
       </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, createContext, useContext, ReactNode, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'; // Might be unused now in App.tsx but checked later.
 import { doc, onSnapshot, setDoc, getDoc, serverTimestamp, updateDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore'; // Check usage
 import { auth, db } from './lib/firebase';
@@ -226,11 +226,11 @@ const AppRoutes: React.FC = () => {
         <Route path="/customer/product/:id" element={<ProductDetails />} />
         <Route path="/customer/vendor/:vendorId" element={<VendorShop />} />
         <Route path="/customer/cart" element={<Cart isAuthenticated={true} />} />
-        <Route path="/customer/orders" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><CustomerOrders /></ProtectedRoute>} />
+        <Route path="/customer/orders" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'GUEST']}><CustomerOrders /></ProtectedRoute>} />
         <Route path="/customer/checkout" element={<Checkout isAuthenticated={true} />} />
         <Route path="/customer/profile" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Profile isAuthenticated={true} /></ProtectedRoute>} />
-        <Route path="/customer/wishlist" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><Wishlist /></ProtectedRoute>} />
-        <Route path="/customer/track/:id" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR']}><TrackingMap /></ProtectedRoute>} />
+        <Route path="/customer/wishlist" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'GUEST']}><Wishlist /></ProtectedRoute>} />
+        <Route path="/customer/track/:id" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR', 'GUEST']}><TrackingMap /></ProtectedRoute>} />
         <Route path="/customer/live/:id" element={<LiveStream />} />
         <Route path="/customer/personal-info" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR', 'RIDER', 'CLIENT', 'ADMIN', 'FUDAYDIYE_ADMIN']}><PersonalInfo /></ProtectedRoute>} />
         <Route path="/customer/addresses" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><SavedAddresses /></ProtectedRoute>} />
@@ -263,6 +263,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/vendor/reviews" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorReviews /></ProtectedRoute>} />
         <Route path="/vendor/stores" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorStoreManagement /></ProtectedRoute>} />
         <Route path="/vendor/staff" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorStoreUsers /></ProtectedRoute>} />
+        <Route path="/vendor/live-sessions" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorLiveSessions /></ProtectedRoute>} />
         <Route path="/vendor/live-setup" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorLiveSaleSetup /></ProtectedRoute>} />
         <Route path="/vendor/live-cockpit/:id" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorLiveCockpit /></ProtectedRoute>} />
         <Route path="/vendor/abandonment" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><AdminAbandonmentReport /></ProtectedRoute>} />

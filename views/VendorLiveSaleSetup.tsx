@@ -1,17 +1,19 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../Providers';
 import { Product, VideoProvider } from '../types';
-
-// Load Agora SDK dynamically
 import AgoraRTC from 'agora-rtc-sdk-ng';
+import { liveStreamService } from '../src/lib/services/liveStreamService';
+import { toast } from 'sonner';
 
 const VendorLiveSaleSetup: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile, loading } = useAuth();
+
+
+  const [searchParams] = useSearchParams();
+  const editSessionId = searchParams.get('edit');
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Fashion');
@@ -19,7 +21,6 @@ const VendorLiveSaleSetup: React.FC = () => {
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [provider, setProvider] = useState<VideoProvider>('AGORA');
-  const [agoraConfig, setAgoraConfig] = useState<any>(null);
 
   const videoRef = useRef<HTMLDivElement>(null);
   const [hasPermission, setHasPermission] = useState(false);
@@ -31,24 +32,58 @@ const VendorLiveSaleSetup: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Load Session if Editing
+  useEffect(() => {
+    if (!editSessionId || !user) return;
+
+    const loadSession = async () => {
+      setIsLoading(true);
+      const unsubscribe = liveStreamService.subscribeToSession(editSessionId, (data) => {
+        if (data) {
+          setTitle(data.title);
+          setCategory(data.category);
+          setMode(data.status === 'LIVE' ? 'LIVE' : 'SCHEDULE');
+
+          if (data.scheduledAt) {
+            const d = new Date(data.scheduledAt.seconds * 1000);
+            setScheduledDate(d.toISOString().split('T')[0]);
+            setScheduledTime(d.toTimeString().slice(0, 5));
+          }
+
+          if (data.featuredProductId) {
+            // Ideally we fetch the full product or reconstruct it
+            // For now, checking against loaded inventory in next effect or just waiting for inventory
+          }
+        }
+        setIsLoading(false);
+      });
+      return () => unsubscribe();
+    };
+    loadSession();
+  }, [editSessionId, user]);
+
+  // Sync Featured Product when inventory loads
+  useEffect(() => {
+    if (editSessionId && inventory.length > 0 && selectedProducts.length === 0) {
+      liveStreamService.subscribeToSession(editSessionId, (data) => {
+        if (data?.featuredProductId) {
+          const found = inventory.find(p => p.id === data.featuredProductId);
+          if (found) setSelectedProducts([found]);
+        }
+      });
+    }
+  }, [inventory, editSessionId]);
+
   // Agora State
   const localTracks = useRef<{ audio: any; video: any }>({ audio: null, video: null });
 
   useEffect(() => {
     if (loading) return;
     if (!profile?.canStream) {
-      alert("Live Streaming Access Denied. Contact Admin.");
+      toast.error("Live Streaming Access Denied. Contact Admin.");
       navigate('/vendor');
     }
   }, [profile, loading, navigate]);
-
-  useEffect(() => {
-    const fetchConfig = async () => {
-      const configSnap = await getDoc(doc(db, "system_config", "global"));
-      if (configSnap.exists()) setAgoraConfig(configSnap.data().integrations?.agora);
-    };
-    fetchConfig();
-  }, []);
 
   const initializeVideoProtocol = async () => {
     if (!navigator.mediaDevices) {
@@ -62,18 +97,24 @@ const VendorLiveSaleSetup: React.FC = () => {
       localTracks.current = { audio: audioTrack, video: videoTrack };
       setHasPermission(true);
       setTimeout(() => { if (videoRef.current) videoTrack.play(videoRef.current); }, 100);
+      toast.success("Broadcast Node Initialized");
     } catch (err: any) {
       setPermError("Hardware link blocked. Verify permissions.");
       setHasPermission(false);
+      toast.error("Camera/Mic Permission Denied");
     } finally { setIsInitializing(false); }
   };
 
   useEffect(() => {
     const fetchInventory = async () => {
       if (!user) return;
-      const q = query(collection(db, "products"), where("vendorId", "==", user.uid));
-      const snap = await getDocs(q);
-      setInventory(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+      try {
+        const products = await liveStreamService.fetchVendorProducts(user.uid);
+        setInventory(products);
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to load inventory");
+      }
     };
     fetchInventory();
     return () => {
@@ -93,32 +134,43 @@ const VendorLiveSaleSetup: React.FC = () => {
         finalScheduledAt = Timestamp.fromDate(dateObj);
       }
 
-      const sessionRef = await addDoc(collection(db, "live_sessions"), {
+      const sessionData = {
         vendorId: user.uid,
         vendorName: profile?.businessName || "Merchant",
         hostAvatar: profile?.avatar || "",
-        title: title,
-        category: category,
-        status: mode === 'LIVE' ? 'LIVE' : 'SCHEDULED',
-        provider: provider,
-        viewerCount: 0,
-        featuredProductId: selectedProducts[0].id,
-        featuredProductName: selectedProducts[0].name,
-        featuredProductPrice: selectedProducts[0].basePrice,
-        featuredProductImg: selectedProducts[0].images[0],
-        streamUrl: '',
-        createdAt: serverTimestamp(),
+        title,
+        category,
+        status: mode === 'LIVE' ? 'LIVE' : 'SCHEDULED' as any,
+        featuredProductId: selectedProducts[0]?.id || null,
+        featuredProductName: selectedProducts[0]?.name || null,
+        featuredProductPrice: selectedProducts[0]?.basePrice || null || selectedProducts[0]?.price || 0,
+        featuredProductImg: selectedProducts[0]?.images?.[0] || null,
         scheduledAt: finalScheduledAt
-      });
+      };
 
-      if (mode === 'LIVE') {
-        navigate(`/customer/live/${sessionRef.id}?mode=seller`);
+      if (editSessionId) {
+        await liveStreamService.updateSession(editSessionId, sessionData);
+        toast.success("Session Updated");
+        navigate('/vendor/live-sessions');
       } else {
-        alert("Session scheduled successfully. It will appear on your shop banner.");
-        navigate('/vendor');
+        // Create New
+        const sessionId = await liveStreamService.createSession({
+          ...sessionData,
+          mode: mode,
+          featuredProduct: selectedProducts[0]
+        });
+
+        if (mode === 'LIVE') {
+          toast.success("Session Created! Redirecting to setup...");
+          navigate(`/vendor/live-cockpit/${sessionId}`);
+        } else {
+          toast.success("Broadcast Scheduled Successfully");
+          navigate('/vendor/live-sessions');
+        }
       }
-    } catch (err) {
-      alert("Database node failure.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Operation failed. Check permissions.");
     } finally {
       setIsLoading(false);
     }
@@ -220,8 +272,8 @@ const VendorLiveSaleSetup: React.FC = () => {
             </div>
           </div>
 
-          <button disabled={!canProceed} onClick={handleAction} className="w-full h-20 bg-red-600 disabled:bg-gray-200 dark:disabled:bg-white/5 text-white font-black text-sm uppercase tracking-[0.4em] rounded-[32px] shadow-2xl flex items-center justify-center gap-4 active:scale-[0.98] transition-all group">
-            {isLoading ? "AUTHORIZING..." : (mode === 'LIVE' ? "INITIALIZE BROADCAST" : "CONFIRM SCHEDULE")}
+          <button disabled={!canProceed} onClick={handleAction} className="w-full h-16 bg-red-600 disabled:bg-gray-200 dark:disabled:bg-white/5 text-white font-black text-sm uppercase tracking-[0.4em] rounded-[32px] shadow-2xl flex items-center justify-center gap-4 active:scale-[0.98] transition-all group">
+            {isLoading ? "PROCESSING..." : (editSessionId ? "UPDATE SESSION" : (mode === 'LIVE' ? "INITIALIZE BROADCAST" : "CONFIRM SCHEDULE"))}
             <span className="material-symbols-outlined font-black group-hover:animate-pulse">sensors</span>
           </button>
         </section>

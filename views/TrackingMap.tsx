@@ -19,42 +19,89 @@ const TrackingMap: React.FC = () => {
 
   useEffect(() => {
     const loadMapScript = async () => {
-      const configSnap = await getDoc(doc(db, "system_config", "global"));
-      const apiKey = configSnap.data()?.integrations?.maps?.apiKey;
-      if (!apiKey) return;
-      if ((window as any).google) { setMapLoaded(true); return; }
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry`;
-      script.async = true;
-      script.onload = () => setMapLoaded(true);
-      document.head.appendChild(script);
+      try {
+        const configSnap = await getDoc(doc(db, "system_config", "global"));
+        const apiKey = configSnap.data()?.integrations?.maps?.apiKey;
+
+        if (!apiKey) {
+          console.warn("Maps API Key missing. Falling back to Mock Map.");
+          setMapLoaded(true);
+          return;
+        }
+
+        if ((window as any).google && (window as any).google.maps) {
+          setMapLoaded(true);
+          return;
+        }
+
+        // Check for existing script tag to prevent double-injection
+        const existingScript = document.querySelector(`script[src^="https://maps.googleapis.com/maps/api/js?key=${apiKey}"]`);
+        if (existingScript) {
+          if (!(window as any).google) {
+            const checkGoogle = setInterval(() => {
+              if ((window as any).google) {
+                setMapLoaded(true);
+                clearInterval(checkGoogle);
+              }
+            }, 500);
+          } else {
+            setMapLoaded(true);
+          }
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry`;
+        script.async = true;
+        script.onload = () => setMapLoaded(true);
+        script.onerror = () => {
+          console.error("Maps API failed to load");
+          setMapLoaded(true);
+        };
+        document.head.appendChild(script);
+      } catch (err) {
+        console.error("Config fetch error", err);
+        setMapLoaded(true);
+      }
     };
     loadMapScript();
   }, []);
 
   useEffect(() => {
     if (mapLoaded && mapRef.current && !googleMap.current) {
-      googleMap.current = new google.maps.Map(mapRef.current, {
-        center: { lat: 9.5624, lng: 44.0770 },
-        zoom: 15,
-        disableDefaultUI: true,
-        styles: mapStyles,
-      });
+      if ((window as any).google) {
+        googleMap.current = new google.maps.Map(mapRef.current, {
+          center: { lat: 9.5624, lng: 44.0770 },
+          zoom: 15,
+          disableDefaultUI: true,
+          styles: mapStyles,
+        });
+      } else {
+        // Mock Map Render (if needed, or just leave gray background)
+        if (mapRef.current) {
+          mapRef.current.innerHTML = '<div style="width:100%;height:100%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;opacity:0.5;font-weight:900;letter-spacing:0.2em;color:#9ca3af">MOCK MAP VISUALIZATION</div>';
+        }
+      }
     }
   }, [mapLoaded]);
 
   useEffect(() => {
     if (!id || !mapLoaded) return;
-    
+
     const unsub = onSnapshot(doc(db, "orders", id), (snap) => {
       if (snap.exists()) {
         const data = { id: snap.id, ...snap.data() } as Order;
         setOrder(data);
-        
+
         if (data.riderId && !riderPhone) {
-          getDoc(doc(db, "users", data.riderId)).then(uSnap => {
-            if (uSnap.exists()) setRiderPhone((uSnap.data() as UserProfile).mobile);
-          });
+          getDoc(doc(db, "users", data.riderId))
+            .then(uSnap => {
+              if (uSnap.exists()) setRiderPhone((uSnap.data() as UserProfile).mobile);
+            })
+            .catch(err => {
+              // Silently handle permission errors for rider profile access
+              console.warn("Rider info access restricted:", err);
+            });
         }
 
         if (data.currentLocation && googleMap.current) {
@@ -78,8 +125,13 @@ const TrackingMap: React.FC = () => {
           googleMap.current.panTo(pos);
         }
       }
+    }, (error) => {
+      console.error("Tracking listener error:", error);
+      if (error.code === 'permission-denied') {
+        // Optional: Handle UI feedback
+      }
     });
-    
+
     return () => unsub();
   }, [id, mapLoaded, riderPhone]);
 
@@ -112,7 +164,7 @@ const TrackingMap: React.FC = () => {
 
       <div className="absolute bottom-0 left-0 w-full h-[40%] z-30 bg-white dark:bg-background-dark rounded-t-[64px] shadow-[0_-24px_80px_rgba(0,0,0,0.2)] flex flex-col border-t border-gray-100">
         <div className="w-16 h-1.5 bg-gray-100 dark:bg-white/5 rounded-full mx-auto mt-6"></div>
-        
+
         <div className="flex-1 px-10 pt-8 flex flex-col">
           <div className="flex justify-between items-start mb-10">
             <div>
@@ -121,13 +173,13 @@ const TrackingMap: React.FC = () => {
                 {order?.status || 'Monitoring...'}
               </h2>
               <div className="flex items-center gap-2">
-                 <span className="text-lg font-bold text-gray-400">Arriving via <span className="text-secondary dark:text-white font-black">Express Node</span></span>
+                <span className="text-lg font-bold text-gray-400">Arriving via <span className="text-secondary dark:text-white font-black">Express Node</span></span>
               </div>
             </div>
             {order?.deliveryCode && (
               <div className="bg-primary/10 px-8 py-4 rounded-[32px] border-2 border-primary/20 text-center group">
-                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Verification PIN</p>
-                 <p className="text-3xl font-black text-secondary dark:text-white tracking-[0.4em] leading-none">{order.deliveryCode}</p>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Verification PIN</p>
+                <p className="text-3xl font-black text-secondary dark:text-white tracking-[0.4em] leading-none">{order.deliveryCode}</p>
               </div>
             )}
           </div>
