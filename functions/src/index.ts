@@ -464,3 +464,9 @@ export const initiatePayment = functions.https.onCall(async (data, context) => {
 // Phase 7: Security Triggers
 // ==========================================
 export { onVendorSuspended } from './triggers/vendorTriggers';
+
+// ==========================================
+// NestJS API Migration (Stage 1)
+// ==========================================
+import { handleNestRequest } from './api/bootstrap';
+export const api = functions.https.onRequest(handleNestRequest);

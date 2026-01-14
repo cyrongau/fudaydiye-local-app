@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.initiatePayment = exports.verifyOtp = exports.requestOtp = exports.sendNotification = exports.onOrderCreated = exports.createOrder = void 0;
+exports.api = exports.onVendorSuspended = exports.initiatePayment = exports.verifyOtp = exports.requestOtp = exports.sendNotification = exports.onOrderCreated = exports.createOrder = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const CommunicationFactory_1 = require("./services/CommunicationFactory");
@@ -378,4 +378,14 @@ exports.initiatePayment = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError("internal", e.message || "Payment Gateway Error");
     }
 });
+// ==========================================
+// Phase 7: Security Triggers
+// ==========================================
+var vendorTriggers_1 = require("./triggers/vendorTriggers");
+Object.defineProperty(exports, "onVendorSuspended", { enumerable: true, get: function () { return vendorTriggers_1.onVendorSuspended; } });
+// ==========================================
+// NestJS API Migration (Stage 1)
+// ==========================================
+const bootstrap_1 = require("./api/bootstrap");
+exports.api = functions.https.onRequest(bootstrap_1.handleNestRequest);
 //# sourceMappingURL=index.js.map
