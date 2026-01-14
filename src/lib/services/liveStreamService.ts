@@ -92,11 +92,26 @@ class LiveStreamService {
      */
     async fetchVendorProducts(vendorId: string): Promise<Product[]> {
         try {
-            const q = query(collection(db, "products"), where("vendorId", "==", vendorId));
-            const snap = await getDocs(q);
-            return snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as Product));
+            const isDev = import.meta.env.DEV;
+            const projectId = 'fudaydiye-commerce';
+            const region = 'us-central1';
+            const baseUrl = isDev
+                ? `http://localhost:5001/${projectId}/${region}/api`
+                : `https://${region}-${projectId}.cloudfunctions.net/api`;
+
+            const response = await fetch(`${baseUrl}/products/vendor/${vendorId}?limit=50`);
+
+            if (!response.ok) {
+                // Fallback to Firestore if API fails? Or just throw.
+                // Strangler pattern: API is source of truth now.
+                throw new Error(`Failed to fetch vendor products: ${response.statusText}`);
+            }
+
+            const products = await response.json();
+            // Ensure type safety (Product[])
+            return products as Product[];
         } catch (error) {
-            console.error("Error fetching vendor products:", error);
+            console.error("Error fetching vendor products via API:", error);
             throw error;
         }
     }

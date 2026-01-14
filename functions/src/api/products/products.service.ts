@@ -55,4 +55,18 @@ export class ProductsService {
             throw error;
         }
     }
+
+    async findByVendor(vendorId: string, limit: number = 50): Promise<any[]> {
+        try {
+            const snapshot = await this.db.collection('products')
+                .where('status', '==', 'ACTIVE') // Ensure you have this field or use category name
+                .where('vendorId', '==', vendorId)
+                .limit(Number(limit))
+                .get();
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (error) {
+            this.logger.error(`Failed to fetch products for vendor ${vendorId}: ${error}`);
+            throw error;
+        }
+    }
 }

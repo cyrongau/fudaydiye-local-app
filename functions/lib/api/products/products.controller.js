@@ -25,6 +25,9 @@ let ProductsController = class ProductsController {
     async findByCategory(slug, limit) {
         return this.productsService.findByCategory(slug, limit);
     }
+    async findByVendor(vendorId, limit) {
+        return this.productsService.findByVendor(vendorId, limit);
+    }
     async findOne(id) {
         const product = await this.productsService.findOne(id);
         if (!product) {
@@ -48,6 +51,14 @@ __decorate([
     __metadata("design:paramtypes", [String, Number]),
     __metadata("design:returntype", Promise)
 ], ProductsController.prototype, "findByCategory", null);
+__decorate([
+    (0, common_1.Get)('vendor/:vendorId'),
+    __param(0, (0, common_1.Param)('vendorId')),
+    __param(1, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Number]),
+    __metadata("design:returntype", Promise)
+], ProductsController.prototype, "findByVendor", null);
 __decorate([
     (0, common_1.Get)(':id'),
     __param(0, (0, common_1.Param)('id')),

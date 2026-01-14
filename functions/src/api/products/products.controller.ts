@@ -16,6 +16,11 @@ export class ProductsController {
         return this.productsService.findByCategory(slug, limit);
     }
 
+    @Get('vendor/:vendorId')
+    async findByVendor(@Param('vendorId') vendorId: string, @Query('limit') limit: number) {
+        return this.productsService.findByVendor(vendorId, limit);
+    }
+
     @Get(':id')
     async findOne(@Param('id') id: string) {
         const product = await this.productsService.findOne(id);

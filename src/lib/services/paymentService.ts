@@ -32,17 +32,36 @@ class PaymentService {
     }
 
     /**
-     * Call the 'createOrder' Cloud Function
+     * Call the 'createOrder' NestJS API Endpoint
      */
     async createOrder(payload: OrderPayload): Promise<{ success: boolean; orderId?: string; message?: string }> {
         try {
             // Validate Payload
             const validatedPayload = OrderPayloadSchema.parse(payload);
 
-            const createOrderFn = httpsCallable(functions, 'createOrder');
-            const result: any = await createOrderFn(validatedPayload);
-            return result.data;
-        } catch (error) {
+            const isDev = import.meta.env.DEV;
+            const projectId = 'fudaydiye-commerce';
+            const region = 'us-central1';
+            const baseUrl = isDev
+                ? `http://localhost:5001/${projectId}/${region}/api`
+                : `https://${region}-${projectId}.cloudfunctions.net/api`;
+
+            const response = await fetch(`${baseUrl}/orders`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(validatedPayload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Order creation failed');
+            }
+
+            const result = await response.json();
+            return result;
+        } catch (error: any) {
             console.error("PaymentService: Create Order Error", error);
             throw error;
         }

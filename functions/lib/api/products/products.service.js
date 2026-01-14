@@ -61,6 +61,20 @@ let ProductsService = ProductsService_1 = class ProductsService {
             throw error;
         }
     }
+    async findByVendor(vendorId, limit = 50) {
+        try {
+            const snapshot = await this.db.collection('products')
+                .where('status', '==', 'ACTIVE') // Ensure you have this field or use category name
+                .where('vendorId', '==', vendorId)
+                .limit(Number(limit))
+                .get();
+            return snapshot.docs.map(doc => (Object.assign({ id: doc.id }, doc.data())));
+        }
+        catch (error) {
+            this.logger.error(`Failed to fetch products for vendor ${vendorId}: ${error}`);
+            throw error;
+        }
+    }
 };
 ProductsService = ProductsService_1 = __decorate([
     (0, common_1.Injectable)(),
