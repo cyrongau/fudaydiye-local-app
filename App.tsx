@@ -136,9 +136,10 @@ const MainLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
     location.pathname.startsWith('/client');
 
   const isOnboarding = location.pathname === '/onboarding';
+  const isLiveRoute = location.pathname.includes('/customer/live/') || location.pathname.includes('/vendor/live-cockpit/');
 
-  // If onboarding, render children directly without layout wrapper
-  if (isOnboarding) {
+  // If onboarding or live stream, render children directly without layout wrapper for full immersion
+  if (isOnboarding || isLiveRoute) {
     return <>{children}</>;
   }
 

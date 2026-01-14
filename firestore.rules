@@ -29,6 +29,18 @@ service cloud.firestore {
         || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'FUDAYDIYE_ADMIN'
         || (request.resource.data.parentVendorId == request.auth.uid)
       ); // Allow Vendor/Fudaydiye to create staff
+
+      // Subcollection: Following (User manages their own list)
+      match /following/{targetId} {
+        allow read: if isSignedIn() && isOwner(userId);
+        allow write: if isSignedIn() && isOwner(userId);
+      }
+
+      // Subcollection: Followers (User adds themselves to others' lists)
+      match /followers/{followerId} {
+        allow read: if isSignedIn() && (isOwner(userId) || request.auth.uid == followerId);
+        allow write: if isSignedIn() && request.auth.uid == followerId;
+      }
     }
 
     // 2. Products Collection
@@ -130,23 +142,40 @@ service cloud.firestore {
     // 14. Live Sessions
     match /live_sessions/{sessionId} {
       allow read: if true;
-      allow write: if isSignedIn() && (
-        resource.data.hostId == request.auth.uid || 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'FUDAYDIYE_ADMIN'
-      );
+      allow read: if true;
+      
+      // CREATE: Check request.resource (new data)
       allow create: if isSignedIn() && (
         request.resource.data.hostId == request.auth.uid ||
         request.auth.token.role == 'FUDAYDIYE_ADMIN'
       );
+
+      // UPDATE: Check resource (existing data) - Allow Owner (Host/Vendor) or Admin
+      allow update: if isSignedIn() && (
+         resource.data.hostId == request.auth.uid || 
+         resource.data.vendorId == request.auth.uid || 
+         resource.data.vendorId == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'FUDAYDIYE_ADMIN'
+      );
       
-      // Allow updating viewer count publicly (for now) to fix "Permission Denied"
+      // Subcollection: Viewer Tracking
+      match /viewers/{viewerId} {
+        allow read, write: if true; // Public access needed for guests
+      }
+      
+      // Also allow public viewer count updates (special case)
+      // Note: "allow update" rules are OR-ed, so if the above matches, this isn't needed, 
+      // but if the above fails (anonymous user), this one is checked.
+      // We need to permit anonymous updates ONLY for viewerCount.
       allow update: if (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewerCount'])
-      ) || (
-        isSignedIn() && (
-          resource.data.hostId == request.auth.uid || 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'FUDAYDIYE_ADMIN'
-        )
+      );
+
+      // DELETE: Check resource (existing data)
+      allow delete: if isSignedIn() && (
+        resource.data.hostId == request.auth.uid || 
+        resource.data.vendorId == request.auth.uid || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'FUDAYDIYE_ADMIN'
       );
       
       // Subcollection: Chat

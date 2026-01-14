@@ -63,6 +63,11 @@ const VendorLiveCockpit: React.FC = () => {
         // 1. Subscribe to Session
         const unsubSession = liveStreamService.subscribeToSession(id, (data) => {
             if (data) {
+                const isOwner = (data.hostId === user.uid || data.vendorId === user.uid);
+                console.log("DEBUG SESSION OWNER:", { isOwner, host: data.hostId, usr: user.uid });
+                if (!isOwner && user.role !== 'FUDAYDIYE_ADMIN') {
+                    // toast.error(`Debug: You are not the owner. (Host: ${data.hostId?.slice(0,5)}... vs You: ${user.uid.slice(0,5)}...)`);
+                }
                 setSession(data);
                 setViewerCount(data.viewerCount || 0);
                 if (data.status === 'ENDED') {
@@ -300,10 +305,10 @@ const VendorLiveCockpit: React.FC = () => {
                 </div>
             </div>
 
-            {/* Middle: Chat Overlay (Left Side on Desktop, Bottom on Mobile logic mostly handled by absolute positioning) */}
-            <div className="absolute bottom-24 left-6 z-20 w-80 max-h-[400px] flex flex-col justify-end pointer-events-none">
+            {/* Middle: Chat Overlay - Raised to avoid overlap with Product Card */}
+            <div className={`absolute left-6 z-20 w-80 max-h-[400px] flex flex-col justify-end pointer-events-none transition-all duration-300 ${session?.featuredProductId ? 'bottom-64' : 'bottom-24'}`}>
                 <div className="space-y-3 pointer-events-auto mask-image-gradient-to-t">
-                    {messages.slice(-5).map(msg => (
+                    {messages.slice(-3).map(msg => (
                         <div key={msg.id} className="flex items-start gap-2 bg-black/40 backdrop-blur-md p-3 rounded-2xl border border-white/5 shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-300">
                             <div className={`size-6 rounded-full flex items-center justify-center text-[10px] font-black uppercase shrink-0 ${['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500'][msg.userName.length % 4]}`}>
                                 {msg.userName.charAt(0)}
@@ -348,20 +353,24 @@ const VendorLiveCockpit: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <button onClick={toggleMute} className={`size-14 rounded-full flex items-center justify-center transition-all shadow-lg ${isMuted ? 'bg-red-500 text-white' : 'bg-white/10 backdrop-blur-md text-white hover:bg-white/20'}`}>
-                        <span className="material-symbols-outlined">{isMuted ? 'mic_off' : 'mic'}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={toggleMute} className={`size-11 rounded-full flex items-center justify-center transition-all shadow-lg ${isMuted ? 'bg-red-500 text-white' : 'bg-white/10 backdrop-blur-md text-white hover:bg-white/20'}`}>
+                        <span className="material-symbols-outlined text-[20px]">{isMuted ? 'mic_off' : 'mic'}</span>
                     </button>
-                    <button onClick={toggleCamera} className={`size-14 rounded-full flex items-center justify-center transition-all shadow-lg ${!cameraOn ? 'bg-red-500 text-white' : 'bg-white/10 backdrop-blur-md text-white hover:bg-white/20'}`}>
-                        <span className="material-symbols-outlined">{!cameraOn ? 'videocam_off' : 'videocam'}</span>
+                    <button onClick={toggleCamera} className={`size-11 rounded-full flex items-center justify-center transition-all shadow-lg ${!cameraOn ? 'bg-red-500 text-white' : 'bg-white/10 backdrop-blur-md text-white hover:bg-white/20'}`}>
+                        <span className="material-symbols-outlined text-[20px]">{!cameraOn ? 'videocam_off' : 'videocam'}</span>
                     </button>
-                    <button onClick={switchCamera} className={`size-14 rounded-full flex items-center justify-center transition-all shadow-lg bg-white/10 backdrop-blur-md text-white hover:bg-white/20`}>
-                        <span className="material-symbols-outlined">flip_camera_ios</span>
-                    </button>
-                    <button onClick={() => setShowProductPicker(true)} className="size-14 rounded-full bg-primary text-secondary flex items-center justify-center shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
-                        <span className="material-symbols-outlined">push_pin</span>
+                    <button onClick={switchCamera} className={`size-11 rounded-full flex items-center justify-center transition-all shadow-lg bg-white/10 backdrop-blur-md text-white hover:bg-white/20`}>
+                        <span className="material-symbols-outlined text-[20px]">flip_camera_ios</span>
                     </button>
                 </div>
+            </div>
+
+            {/* Side Controls: Product Picker (Mid Right) */}
+            <div className="absolute top-1/2 right-6 -translate-y-1/2 z-30 flex flex-col gap-4">
+                <button onClick={() => setShowProductPicker(true)} className="size-14 rounded-full bg-primary text-secondary flex items-center justify-center shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all animate-in slide-in-from-right-10 duration-700">
+                    <span className="material-symbols-outlined text-[24px]">shopping_bag</span>
+                </button>
             </div>
 
             {/* Product Picker Sheet */}
@@ -376,35 +385,52 @@ const VendorLiveCockpit: React.FC = () => {
                             <button onClick={() => setShowProductPicker(false)} className="size-8 bg-gray-200 dark:bg-white/10 rounded-full flex items-center justify-center active:scale-90 transition-all"><span className="material-symbols-outlined text-[16px]">close</span></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                            {products.map(p => (
-                                <div key={p.id}
-                                    onClick={() => {
-                                        setConfirmModal({
-                                            isOpen: true,
-                                            title: "Pin Product",
-                                            message: `Feature "${p.name}" for all viewers?`,
-                                            confirmLabel: "Pin Now",
-                                            onConfirm: async () => {
-                                                await liveStreamService.pinProductToStream(id!, p);
-                                                setSession(prev => prev ? ({ ...prev, featuredProductId: p.id, featuredProductName: p.name, featuredProductImg: p.images?.[0], featuredProductPrice: p.price }) : null);
-                                                setShowProductPicker(false);
-                                                toast.success("Product Pinned!");
-                                            }
-                                        });
-                                    }}
-                                    className="flex items-center gap-4 p-4 rounded-3xl bg-gray-50 dark:bg-white/5 border border-transparent hover:border-primary/50 active:scale-[0.98] transition-all cursor-pointer"
-                                >
-                                    <img src={p.images?.[0] || "https://placehold.co/100"} className="size-16 rounded-xl object-cover bg-gray-200" />
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="text-xs font-black text-secondary dark:text-white truncate uppercase">{p.name}</h4>
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">{p.vendorId === user?.uid ? 'In Stock' : 'Out of Stock'}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-sm font-black text-primary">${p.price}</p>
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase">Select</span>
-                                    </div>
-                                </div>
-                            ))}
+                            {/* Filter: Show Session Products First */}
+                            {(() => {
+                                const sessionProductIds = session?.productIds || [];
+                                const sessionProducts = products.filter(p => sessionProductIds.includes(p.id));
+                                const otherProducts = products.filter(p => !sessionProductIds.includes(p.id));
+                                // Consolidated list with headers if needed, or just sorted
+                                const displayProducts = [...sessionProducts, ...otherProducts];
+
+                                return displayProducts.map(p => {
+                                    const isSessionItem = sessionProductIds.includes(p.id);
+                                    return (
+                                        <div key={p.id}
+                                            onClick={() => {
+                                                setConfirmModal({
+                                                    isOpen: true,
+                                                    title: "Pin Product",
+                                                    message: `Feature "${p.name}" on stream?`,
+                                                    confirmLabel: "Pin Now",
+                                                    onConfirm: async () => {
+                                                        await liveStreamService.pinProductToStream(id!, p);
+                                                        setSession(prev => prev ? ({ ...prev, featuredProductId: p.id, featuredProductName: p.name, featuredProductImg: p.images?.[0], featuredProductPrice: p.basePrice || p.price || 0 }) : null);
+                                                        setShowProductPicker(false);
+                                                        toast.success(`Pinned: ${p.name}`);
+                                                        // Play sound if available
+                                                        // new Audio('/sounds/ping.mp3').play().catch(() => {}); 
+                                                    }
+                                                });
+                                            }}
+                                            className={`flex items-center gap-4 p-4 rounded-3xl border transition-all cursor-pointer ${isSessionItem ? 'bg-primary/5 border-primary/20' : 'bg-gray-50 dark:bg-white/5 border-transparent hover:border-gray-200'}`}
+                                        >
+                                            <img src={p.images?.[0] || "https://placehold.co/100"} className="size-16 rounded-xl object-cover bg-gray-200" />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-xs font-black text-secondary dark:text-white truncate uppercase">{p.name}</h4>
+                                                    {isSessionItem && <span className="bg-primary text-secondary text-[8px] font-bold px-1.5 rounded-full">SELECTED</span>}
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">{p.vendorId === user?.uid ? 'In Stock' : 'Out of Stock'}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm font-black text-primary">${p.price}</p>
+                                                <span className="text-[8px] font-bold text-gray-400 uppercase">Pin</span>
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
                         </div>
                     </div>
                 </div>

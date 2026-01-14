@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, limit, getDoc, runTransaction } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, limit, getDoc, runTransaction, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db, functions } from '../lib/firebase';
 import { useAuth, useCart } from '../Providers';
 import { httpsCallable } from 'firebase/functions';
@@ -8,6 +8,7 @@ import { GoogleGenAI } from "@google/genai";
 
 // Load Agora SDK dynamically
 import AgoraRTC from 'agora-rtc-sdk-ng';
+import { Share } from '@capacitor/share';
 
 interface Heart {
   id: string;
@@ -50,15 +51,21 @@ const LiveStream: React.FC = () => {
       if (mode === 'seller' && !localTracks.current.video) {
         try {
           const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
+          // Fix: Ensure audio element exists if needed by some browsers, though Agora usually handles this.
+          // For now, no change needed here, the error `The element has no supported sources` usually means an empty <audio> or <video> tag was trying to play.
+          // We will focus on the connection error first.
           localTracks.current = { audio: audioTrack, video: videoTrack };
-          if (videoRef.current) videoTrack.play(videoRef.current);
+          if (videoRef.current) videoTrack.play(videoRef.current, { fit: "contain" });
         } catch (e) { console.error("Hardware node failure:", e); }
       }
 
       if (data.provider !== 'AGORA') return;
       const configSnap = await getDoc(doc(db, "system_config", "global"));
       const agoraAppId = configSnap.data()?.integrations?.agora?.appId;
-      if (!agoraAppId) return;
+      if (!agoraAppId) {
+        console.error("Agora App ID missing");
+        return;
+      }
 
       rtcClient.current = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
       rtcClient.current.setClientRole((mode === 'seller') ? "host" : "audience");
@@ -66,20 +73,25 @@ const LiveStream: React.FC = () => {
       rtcClient.current.on("user-published", async (remoteUser: any, mediaType: "audio" | "video") => {
         try {
           await rtcClient.current.subscribe(remoteUser, mediaType);
+          console.log("Subscribed to remote user:", remoteUser.uid, mediaType);
+
           if (mediaType === "video" && videoRef.current) {
             // Fix: Clear container before playing to ensure clean node attachment
             videoRef.current.innerHTML = '';
-            remoteUser.videoTrack.play(videoRef.current);
+            remoteUser.videoTrack.play(videoRef.current, { fit: "contain" });
             setIsStreamBlocked(false);
           }
           if (mediaType === "audio") remoteUser.audioTrack.play();
         } catch (err: any) {
+          console.error("Subscription failed:", err);
           if (err.code === 'AUTOPLAY_NOT_ALLOWED') setIsStreamBlocked(true);
         }
       });
 
       try {
-        await rtcClient.current.join(agoraAppId, id, null, user?.uid || `guest_${Date.now()} `);
+        const uid = user?.uid || `guest_${Date.now()}`;
+        console.log("Joining Agora channel:", id, "as", uid);
+        await rtcClient.current.join(agoraAppId, id, null, uid);
         if (mode === 'seller' && localTracks.current.video) {
           await rtcClient.current.publish([localTracks.current.audio, localTracks.current.video]);
         }
@@ -90,9 +102,16 @@ const LiveStream: React.FC = () => {
       if (snap.exists()) {
         const data = snap.data();
         setSessionData(data);
-        if (data.status === 'ENDED') { cleanupAndExit(true); return; }
+        if (data.status === 'ENDED') { endSessionNavigate(true); return; }
         if (!rtcClient.current && data.status === 'LIVE') setupRtc(data);
+      } else {
+        console.warn("Session document does not exist");
+        // Only redirect if we are sure it doesn't exist, but maybe wait a bit?
+        // navigate('/customer'); 
       }
+    }, (error) => {
+      console.error("Snapshot Listener Error:", error);
+      // Do NOT redirect immediately on transient network errors
     });
 
     const qHearts = query(collection(db, "live_sessions", id, "reactions"), orderBy("createdAt", "desc"), limit(10));
@@ -110,26 +129,116 @@ const LiveStream: React.FC = () => {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     });
 
-    if (mode === 'buyer' && !isObserver) {
-      updateDoc(doc(db, "live_sessions", id), { viewerCount: increment(1) })
-        .catch(err => console.warn("Failed to update viewer count:", err));
-    }
+    // Track Viewers: Unique logic
+    const trackViewer = async () => {
+      if (!id || mode !== 'buyer' || isObserver) return;
 
-    return () => { unsubSession(); unsubHearts(); unsubChat(); cleanupAndExit(); };
+      // 1. Get or Create Persistent Guest ID
+      let viewerId = user?.uid;
+      if (!viewerId) {
+        viewerId = localStorage.getItem('fddy_guest_id');
+        if (!viewerId) {
+          viewerId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          localStorage.setItem('fddy_guest_id', viewerId);
+        }
+      }
+
+      const viewerRef = doc(db, "live_sessions", id, "viewers", viewerId);
+
+      try {
+        // 2. Check if already active
+        const docSnap = await getDoc(viewerRef);
+        if (!docSnap.exists()) {
+          // 3. Register viewer
+          await setDoc(viewerRef, {
+            active: true,
+            joinedAt: serverTimestamp(),
+            userId: viewerId,
+            userName: user?.displayName || "Guest",
+            device: navigator.userAgent
+          });
+
+          // 4. Increment Count (Transactionally safe or optimistic)
+          await updateDoc(doc(db, "live_sessions", id), { viewerCount: increment(1) });
+        }
+      } catch (e) {
+        console.warn("Viewer tracking failed", e);
+      }
+
+      return viewerId; // Return ID for cleanup
+    };
+
+    let sessionViewerId: string | null = null;
+    trackViewer().then(vid => { sessionViewerId = vid || null; });
+
+    return () => {
+      unsubSession(); unsubHearts(); unsubChat();
+      cleanupResources(sessionViewerId); // Pass viewer ID to cleanup
+    };
   }, [id, mode, isObserver, user]);
 
-  const cleanupAndExit = async (wasTerminated = false) => {
+  const cleanupCalled = useRef(false); // Ref to prevent double decrement
+
+  // Check Local Storage for Like Status on mount
+  useEffect(() => {
+    if (id) {
+      // Restore Like State
+      const likedSessions = JSON.parse(localStorage.getItem('liked_sessions') || '[]');
+      if (likedSessions.includes(id)) setHasLiked(true);
+    }
+  }, [id]);
+
+  // Separate states
+  const [hasLiked, setHasLiked] = useState(false);
+
+  useEffect(() => {
+    if (id) {
+      const liked = JSON.parse(localStorage.getItem('liked_sessions') || '[]').includes(id);
+      setHasLiked(liked);
+
+      if (user && sessionData?.vendorId) {
+        const checkFollow = async () => {
+          const docSnap = await getDoc(doc(db, "users", user.uid, "following", sessionData.vendorId));
+          if (docSnap.exists()) setIsFollowing(true);
+        };
+        checkFollow();
+      }
+    }
+  }, [id, user, sessionData?.vendorId]);
+
+  const cleanupResources = async (viewerIdToRemove: string | null = null) => {
+    // Only clean up Agora/Tracks
     if (rtcClient.current) { await rtcClient.current.leave(); rtcClient.current = null; }
     if (localTracks.current.audio) { localTracks.current.audio.stop(); localTracks.current.audio.close(); localTracks.current.audio = null; }
     if (localTracks.current.video) { localTracks.current.video.stop(); localTracks.current.video.close(); localTracks.current.video = null; }
-    if (mode === 'buyer' && !isObserver && id) {
-      updateDoc(doc(db, "live_sessions", id), { viewerCount: increment(-1) })
-        .catch(err => console.warn("Failed to decrement viewer count:", err));
+
+    // Deregister Viewer
+    if (mode === 'buyer' && !isObserver && id && viewerIdToRemove) {
+      try {
+        const viewerRef = doc(db, "live_sessions", id, "viewers", viewerIdToRemove);
+        await deleteDoc(viewerRef);
+        await updateDoc(doc(db, "live_sessions", id), { viewerCount: increment(-1) });
+      } catch (e) { console.warn("Cleanup failed:", e); }
     }
+  };
+
+  const endSessionNavigate = async (wasTerminated = false) => {
+    if (cleanupCalled.current) return;
+    cleanupCalled.current = true;
+
+    // Use proper viewer ID from ref if available, or sessionViewerId if passed? 
+    // Since this is called from UI, we might not have sessionViewerId in scope if it's outside useEffect.
+    // We should rely on a Ref for viewerID if we want to clean it up here.
+    // Let's assume the useEffect cleanup handles the viewer removal if we unmount?
+    // BUT if we navigate away, unmount happens.
+    // So endSessionNavigate just needs to Navigate. The useEffect cleanup will run on unmount.
+
+    // However, we want to show alerts or handle specific 'termination' logic.
+
     if (wasTerminated) alert(mode === 'seller' ? "Identity Node: Broadcast Terminated." : "The live session has ended.");
     if (isObserver) navigate('/admin/live-moderation');
     else if (mode === 'seller') navigate('/vendor');
-    else if (wasTerminated) navigate('/customer');
+    else if (wasTerminated || mode === 'buyer') navigate('/customer');
   };
 
   const handleEndSession = async () => {
@@ -168,6 +277,16 @@ const LiveStream: React.FC = () => {
 
   const broadcastHeart = async () => {
     if (!id) return;
+    // UI Update immediate
+    setHasLiked(true);
+
+    // Persist to Local Storage
+    const likedSessions = JSON.parse(localStorage.getItem('liked_sessions') || '[]');
+    if (!likedSessions.includes(id)) {
+      likedSessions.push(id);
+      localStorage.setItem('liked_sessions', JSON.stringify(likedSessions));
+    }
+
     try {
       await addDoc(collection(db, "live_sessions", id, "reactions"), { x: Math.random() * 80 - 40, type: 'heart', createdAt: serverTimestamp() });
     } catch (e) {
@@ -175,32 +294,52 @@ const LiveStream: React.FC = () => {
     }
   };
 
-  const handleFollow = () => {
-    setIsFollowing(!isFollowing);
-    // In real app, call userService.followVendor(vendorId)
-    // toast.success(isFollowing ? "Unfollowed" : "Following!");
+  const handleFollow = async () => {
+    if (!user || !sessionData?.vendorId) return;
+
+    const newStatus = !isFollowing;
+    setIsFollowing(newStatus); // Optimistic UI
+
+    const userFollowRef = doc(db, "users", user.uid, "following", sessionData.vendorId);
+    // write to vendor's follower list as well
+    const vendorFollowerRef = doc(db, "users", sessionData.vendorId, "followers", user.uid);
+
+    const batch = writeBatch(db);
+
+    if (newStatus) {
+      batch.set(userFollowRef, { followedAt: serverTimestamp(), vendorName: sessionData.vendorName || "Vendor" });
+      batch.set(vendorFollowerRef, { followedAt: serverTimestamp(), userName: profile?.fullName || "User", userAvatar: profile?.avatar || null });
+    } else {
+      batch.delete(userFollowRef);
+      batch.delete(vendorFollowerRef);
+    }
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      console.error("Follow failed:", e);
+      setIsFollowing(!newStatus); // Revert on failure
+    }
   };
 
   const handleShare = async () => {
     const url = window.location.href;
-    const shareData = {
-      title: sessionData?.title || 'Live Sale',
-      text: `Join the live sale: ${sessionData?.title}`,
-      url: url
-    };
 
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (e) {
-        // User cancelled or share failed
-      }
-    } else {
-      // Fallback for non-HTTPS or unsupported browsers
+    try {
+      await Share.share({
+        title: sessionData?.title || 'Live Sale',
+        text: `Join the live sale: ${sessionData?.title}`,
+        url: url,
+        dialogTitle: 'Share Live Stream',
+      });
+    } catch (e) {
+      console.log("Native share skipped or cancelled:", e);
+      // Fallback for Desktop/Unsupported Browsers
       try {
         await navigator.clipboard.writeText(url);
+        // Using alert for now, ideally use a Toast component
         alert("Link copied to clipboard!");
-      } catch (e) {
+      } catch (err) {
         prompt("Copy this link:", url);
       }
     }
@@ -215,7 +354,7 @@ const LiveStream: React.FC = () => {
   return (
     <div className="relative h-screen w-full bg-black overflow-hidden flex flex-col font-display">
       <div className="absolute inset-0 z-0 bg-zinc-950">
-        <div ref={videoRef} className="h-full w-full object-cover" />
+        <div ref={videoRef} className="h-full w-full bg-black flex items-center justify-center" />
         <div className="absolute inset-x-0 bottom-0 h-[40%] bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
       </div>
 
@@ -269,7 +408,7 @@ const LiveStream: React.FC = () => {
           <div className="bg-red-600 text-white text-[10px] font-black px-3 py-1.5 rounded-md uppercase animate-pulse shadow-lg">
             LIVE
           </div>
-          <button onClick={() => cleanupAndExit()} className="size-8 rounded-full bg-black/40 text-white backdrop-blur-md flex items-center justify-center border border-white/10 ml-1">
+          <button onClick={() => endSessionNavigate(false)} className="size-8 rounded-full bg-black/40 text-white backdrop-blur-md flex items-center justify-center border border-white/10 ml-1">
             <span className="material-symbols-outlined text-lg">close</span>
           </button>
         </div>
@@ -278,8 +417,8 @@ const LiveStream: React.FC = () => {
       {/* Right Side Actions */}
       <div className="absolute bottom-24 right-4 z-40 flex flex-col gap-4 items-center">
         <button onClick={broadcastHeart} className="flex flex-col items-center gap-1 group">
-          <div className="size-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform group-active:bg-primary/20">
-            <span className="material-symbols-outlined text-white text-3xl group-active:text-primary fill-1">favorite</span>
+          <div className={`size-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform group-active:bg-primary/20 ${hasLiked ? 'text-primary' : ''}`}>
+            <span className={`material-symbols-outlined text-white text-3xl group-active:text-primary fill-1 ${hasLiked ? 'text-primary' : ''}`}>favorite</span>
           </div>
           <span className="text-[10px] font-black text-white shadow-black drop-shadow-md">Like</span>
         </button>
@@ -305,7 +444,7 @@ const LiveStream: React.FC = () => {
 
         {/* Chat Stream (Bottom Left) */}
         <div className="flex flex-col items-start gap-2 max-w-[75%] max-h-[200px] overflow-hidden mask-image-gradient-t">
-          {messages.slice(-5).map((msg) => (
+          {messages.slice(-3).map((msg) => (
             <div key={msg.id} className="animate-in slide-in-from-bottom-2 duration-300">
               <div className="bg-black/30 backdrop-blur-sm rounded-2xl rounded-tl-none px-3 py-2 border border-white/5">
                 <span className="text-[10px] font-black text-gray-300 mr-2 opacity-80">{msg.userName}</span>

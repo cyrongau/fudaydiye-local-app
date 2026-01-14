@@ -63,12 +63,29 @@ const VendorLiveSaleSetup: React.FC = () => {
   }, [editSessionId, user]);
 
   // Sync Featured Product when inventory loads
+  // Sync Selected Products when inventory loads
   useEffect(() => {
     if (editSessionId && inventory.length > 0 && selectedProducts.length === 0) {
       liveStreamService.subscribeToSession(editSessionId, (data) => {
-        if (data?.featuredProductId) {
-          const found = inventory.find(p => p.id === data.featuredProductId);
-          if (found) setSelectedProducts([found]);
+        if (data) {
+          const loadedProducts: Product[] = [];
+          // 1. Try to load from productIds array (new way)
+          if (data.productIds && Array.isArray(data.productIds)) {
+            data.productIds.forEach(id => {
+              const p = inventory.find(inv => inv.id === id);
+              if (p) loadedProducts.push(p);
+            });
+          }
+
+          // 2. Fallback: If no list, just use featured (legacy)
+          if (loadedProducts.length === 0 && data.featuredProductId) {
+            const found = inventory.find(p => p.id === data.featuredProductId);
+            if (found) loadedProducts.push(found);
+          }
+
+          if (loadedProducts.length > 0) {
+            setSelectedProducts(loadedProducts);
+          }
         }
       });
     }
@@ -145,7 +162,8 @@ const VendorLiveSaleSetup: React.FC = () => {
         featuredProductName: selectedProducts[0]?.name || null,
         featuredProductPrice: selectedProducts[0]?.basePrice || null || selectedProducts[0]?.price || 0,
         featuredProductImg: selectedProducts[0]?.images?.[0] || null,
-        scheduledAt: finalScheduledAt
+        scheduledAt: finalScheduledAt,
+        productIds: selectedProducts.map(p => p.id)
       };
 
       if (editSessionId) {

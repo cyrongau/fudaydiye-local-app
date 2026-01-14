@@ -32,10 +32,24 @@ const CustomerExplore: React.FC = () => {
          setHeroSlides(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CMSContent)));
       });
 
-      // 2. Sync Live Sessions
-      const qLive = query(collection(db, "live_sessions"), where("status", "==", "LIVE"), limit(10));
+      // 2. Sync Live Sessions (Live & Scheduled)
+      const qLive = query(collection(db, "live_sessions"), where("status", "in", ["LIVE", "SCHEDULED"]), limit(12));
       const unsubLive = onSnapshot(qLive, (snap) => {
-         setLiveSessions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LiveSaleSession)));
+         const sessions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LiveSaleSession));
+
+         // Filter out "zombie" sessions (negative viewers from old bugs) or stale live sessions
+         const validSessions = sessions.filter(s => {
+            if (s.status === 'LIVE' && (s.viewerCount || 0) < 0) return false;
+            return true;
+         });
+
+         // Sort: LIVE first, then Scheduled by date
+         validSessions.sort((a, b) => {
+            if (a.status === b.status) return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0); // Logic could be refined
+            return a.status === 'LIVE' ? -1 : 1;
+         });
+
+         setLiveSessions(validSessions);
       });
 
       // 3. Sync Products
@@ -142,13 +156,21 @@ const CustomerExplore: React.FC = () => {
                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent"></div>
 
                            <div className="absolute top-3 left-3 flex items-center gap-2">
-                              <div className="bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-lg uppercase tracking-widest flex items-center gap-1 shadow-lg">
-                                 <span className="size-1 bg-white rounded-full animate-pulse"></span>
-                                 LIVE
-                              </div>
-                              <div className="bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-lg text-white text-[8px] font-black uppercase tracking-widest border border-white/10">
-                                 {session.viewerCount}
-                              </div>
+                              {session.status === 'LIVE' ? (
+                                 <>
+                                    <div className="bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-lg uppercase tracking-widest flex items-center gap-1 shadow-lg">
+                                       <span className="size-1 bg-white rounded-full animate-pulse"></span>
+                                       LIVE
+                                    </div>
+                                    <div className="bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-lg text-white text-[8px] font-black uppercase tracking-widest border border-white/10">
+                                       {Math.max(0, session.viewerCount || 0)}
+                                    </div>
+                                 </>
+                              ) : (
+                                 <div className="bg-purple-600 text-white text-[8px] font-black px-2 py-0.5 rounded-lg uppercase tracking-widest flex items-center gap-1 shadow-lg">
+                                    SCHEDULED
+                                 </div>
+                              )}
                            </div>
 
                            <div className="absolute bottom-4 left-4 right-4">

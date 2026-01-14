@@ -92,27 +92,29 @@ class LiveStreamService {
      */
     async fetchVendorProducts(vendorId: string): Promise<Product[]> {
         try {
-            const isDev = import.meta.env.DEV;
-            const projectId = 'fudaydiye-commerce';
-            const region = 'us-central1';
-            const baseUrl = isDev
-                ? `http://localhost:5001/${projectId}/${region}/api`
-                : `https://${region}-${projectId}.cloudfunctions.net/api`;
-
-            const response = await fetch(`${baseUrl}/products/vendor/${vendorId}?limit=50`);
-
-            if (!response.ok) {
-                // Fallback to Firestore if API fails? Or just throw.
-                // Strangler pattern: API is source of truth now.
-                throw new Error(`Failed to fetch vendor products: ${response.statusText}`);
-            }
-
-            const products = await response.json();
-            // Ensure type safety (Product[])
-            return products as Product[];
+            const q = query(
+                collection(db, "products"),
+                where("vendorId", "==", vendorId),
+                // orderBy("createdAt", "desc"), // Temporarily removed to fix Index Error
+                limit(50)
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
         } catch (error) {
-            console.error("Error fetching vendor products via API:", error);
-            throw error;
+            console.error("Error fetching vendor products:", error);
+            // Fallback: Try without sort if index is missing (common dev issue)
+            try {
+                const qFallback = query(
+                    collection(db, "products"),
+                    where("vendorId", "==", vendorId),
+                    limit(50)
+                );
+                const snapFallback = await getDocs(qFallback);
+                return snapFallback.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+            } catch (fallbackError) {
+                console.error("Fallback fetch failed:", fallbackError);
+                throw fallbackError;
+            }
         }
     }
 
@@ -150,6 +152,7 @@ class LiveStreamService {
         category: string;
         mode: 'LIVE' | 'SCHEDULE';
         featuredProduct?: Product;
+        productIds?: string[];
         scheduledAt?: any;
     }): Promise<string> {
         try {
@@ -171,7 +174,8 @@ class LiveStreamService {
                 featuredProductImg: validatedData.featuredProduct?.images?.[0] || null,
                 streamUrl: '',
                 createdAt: serverTimestamp(),
-                scheduledAt: validatedData.scheduledAt || null
+                scheduledAt: validatedData.scheduledAt || null,
+                productIds: validatedData.productIds || []
             });
             return docRef.id;
         } catch (error) {
@@ -188,6 +192,23 @@ class LiveStreamService {
             await updateDoc(doc(db, "live_sessions", sessionId), data);
         } catch (error) {
             console.error("Error updating session:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * Pin a product to the live stream.
+     */
+    async pinProductToStream(sessionId: string, product: Product): Promise<void> {
+        try {
+            await updateDoc(doc(db, "live_sessions", sessionId), {
+                featuredProductId: product.id,
+                featuredProductName: product.name,
+                featuredProductPrice: product.basePrice || product.price || 0, // Fallback to 0 if undefined
+                featuredProductImg: product.images?.[0] || null
+            });
+        } catch (error) {
+            console.error("Error pinning product:", error);
             throw error;
         }
     }

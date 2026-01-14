@@ -22,7 +22,8 @@ export const LiveSessionSchema = z.object({
     endedAt: z.any().optional(),
     createdAt: z.any().optional(),
 
-    likes: z.number().int().default(0)
+    likes: z.number().int().default(0),
+    productIds: z.array(z.string()).optional() // List of pinned/selected inventory IDs for this session
 });
 
 export const CreateSessionPayloadSchema = z.object({
@@ -33,6 +34,7 @@ export const CreateSessionPayloadSchema = z.object({
     category: z.string().min(1, "Category is required"),
     mode: z.enum(['LIVE', 'SCHEDULE']),
     featuredProduct: z.any().optional(), // Looser validation here as it comes from UI object
+    productIds: z.array(z.string()).optional(),
     scheduledAt: z.any().optional()
 });
 

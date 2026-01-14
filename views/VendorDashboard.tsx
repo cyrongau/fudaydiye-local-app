@@ -1,28 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DocumentModal from '../components/DocumentModal';
-import { GoogleGenAI } from "@google/genai";
-import { collection, query, where, orderBy, doc, deleteDoc, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../Providers';
 import AdminAbandonmentReport from './AdminAbandonmentReport';
 import HeaderNotification from '../components/HeaderNotification';
-
-interface Message {
-   role: 'user' | 'ai';
-   text: string;
-   type?: 'text' | 'sales_summary' | 'product_action';
-}
-
-interface Notification {
-   id: string;
-   title: string;
-   message: string;
-   type: 'ORDER' | 'SYSTEM' | 'ALERT';
-   read: boolean;
-   link?: string;
-   createdAt: any;
-}
 
 const VendorDashboard: React.FC = () => {
    const navigate = useNavigate();
@@ -31,10 +13,10 @@ const VendorDashboard: React.FC = () => {
       sales: 0,
       activeOrders: 0,
       pendingShipment: 0,
-      activeProducts: 0
+      activeProducts: 0,
+      followers: 0
    });
    const [recentOrders, setRecentOrders] = useState<any[]>([]);
-   const [topProducts, setTopProducts] = useState<any[]>([]);
    const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'LEADS'>('DASHBOARD');
 
    useEffect(() => {
@@ -68,22 +50,17 @@ const VendorDashboard: React.FC = () => {
             setStats(prev => ({ ...prev, sales: totalSales, activeOrders: active, pendingShipment: pending }));
             setRecentOrders(orders.slice(0, 5));
 
-            // Calculate Top Products based on recent orders (Basic logic)
-            const productCounts: Record<string, any> = {};
-            orders.forEach(order => {
-               order.items?.forEach((item: any) => {
-                  if (!productCounts[item.productId]) {
-                     productCounts[item.productId] = { name: item.name, sold: 0, img: item.image };
-                  }
-                  productCounts[item.productId].sold += item.qty || 1;
-               });
-            });
-            setTopProducts(Object.values(productCounts).sort((a: any, b: any) => b.sold - a.sold).slice(0, 5));
-
             // 2. Fetch Products (Inventory Stats)
             const qProducts = query(collection(db, "products"), where("vendorId", "==", user.uid), where("status", "==", "ACTIVE"));
             const productSnap = await getDocs(qProducts);
             setStats(prev => ({ ...prev, activeProducts: productSnap.size }));
+
+            // 3. Fetch Followers Count
+            try {
+               const qFollowers = query(collection(db, "users", user.uid, "followers"));
+               const followerSnap = await getDocs(qFollowers);
+               setStats(prev => ({ ...prev, followers: followerSnap.size }));
+            } catch (e) { }
 
          } catch (error) {
             console.error("Dashboard Data Error:", error);
@@ -107,7 +84,6 @@ const VendorDashboard: React.FC = () => {
             </div>
             <div className="flex items-center gap-3">
                <HeaderNotification />
-
                <div className="size-8 rounded-full bg-orange-300 overflow-hidden border border-orange-100">
                   <img src={profile?.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200"} className="w-full h-full object-cover" alt="Profile" />
                </div>
@@ -143,6 +119,7 @@ const VendorDashboard: React.FC = () => {
 
             {/* Stats Cards - Staggered Grid */}
             <div className="grid grid-cols-2 gap-4">
+               {/* Sales Card */}
                <div className="bg-white dark:bg-surface-dark p-5 rounded-[24px] shadow-sm border border-gray-100 dark:border-white/5 flex flex-col justify-between h-32">
                   <div className="flex items-start justify-between">
                      <div className="size-8 bg-green-100 text-green-600 rounded-xl flex items-center justify-center"><span className="material-symbols-outlined text-lg">payments</span></div>
@@ -153,6 +130,8 @@ const VendorDashboard: React.FC = () => {
                      <p className="text-2xl font-black text-secondary dark:text-white mt-0.5">{formatCurrency(stats.sales)}</p>
                   </div>
                </div>
+
+               {/* Active Orders Card */}
                <div className="bg-white dark:bg-surface-dark p-5 rounded-[24px] shadow-sm border border-gray-100 dark:border-white/5 flex flex-col justify-between h-32">
                   <div className="flex items-start justify-between">
                      <div className="size-8 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center"><span className="material-symbols-outlined text-lg">shopping_bag</span></div>
@@ -161,6 +140,27 @@ const VendorDashboard: React.FC = () => {
                   <div>
                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Active Orders</span>
                      <p className="text-2xl font-black text-secondary dark:text-white mt-0.5">{stats.activeOrders}</p>
+                  </div>
+               </div>
+
+               {/* Followers Card (Full Width) */}
+               <div className="col-span-2 bg-white dark:bg-surface-dark p-5 rounded-[24px] shadow-sm border border-gray-100 dark:border-white/5 flex flex-col justify-between h-32">
+                  <div className="flex items-start justify-between">
+                     <div className="size-8 bg-pink-100 text-pink-600 rounded-xl flex items-center justify-center"><span className="material-symbols-outlined text-lg">group</span></div>
+                     <span className="text-[10px] bg-pink-50 text-pink-600 px-2 py-1 rounded-md font-bold">Total Audience</span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                     <div>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Followers</span>
+                        <p className="text-2xl font-black text-secondary dark:text-white mt-0.5">{stats.followers || 0}</p>
+                     </div>
+                     <div className="flex -space-x-2">
+                        {[1, 2, 3, 4].map(i => (
+                           <div key={i} className="size-8 rounded-full bg-gray-200 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-[8px] font-bold text-gray-500">
+                              {i === 4 ? '+' : ''}
+                           </div>
+                        ))}
+                     </div>
                   </div>
                </div>
             </div>
@@ -181,37 +181,32 @@ const VendorDashboard: React.FC = () => {
             {activeTab === 'LEADS' ? (
                <AdminAbandonmentReport />
             ) : (
-               <>
-                  {/* Recent Orders List */}
-
-                  {/* Recent Orders List */}
-                  <div>
-                     <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-black text-secondary dark:text-white">Recent Orders</h3>
-                        <button onClick={() => navigate('/vendor/orders')} className="text-[11px] font-black text-[#06DC7F] uppercase tracking-wider">View All</button>
-                     </div>
-                     <div className="space-y-3">
-                        {recentOrders.length === 0 && <div className="bg-white dark:bg-surface-dark rounded-2xl p-8 text-center text-gray-400 text-xs">No orders yet today.</div>}
-                        {recentOrders.map((order, i) => (
-                           <div key={i} className="bg-white dark:bg-surface-dark p-3 rounded-[20px] shadow-sm border border-gray-100 dark:border-white/5 flex gap-4 active:scale-[0.98] transition-all">
-                              <div className="size-14 rounded-xl bg-gray-100 shrink-0 overflow-hidden">
-                                 <img src={order.items?.[0]?.image || "https://placehold.co/100"} className="size-full object-cover" />
+               <div>
+                  <div className="flex items-center justify-between mb-3">
+                     <h3 className="text-sm font-black text-secondary dark:text-white">Recent Orders</h3>
+                     <button onClick={() => navigate('/vendor/orders')} className="text-[11px] font-black text-[#06DC7F] uppercase tracking-wider">View All</button>
+                  </div>
+                  <div className="space-y-3">
+                     {recentOrders.length === 0 && <div className="bg-white dark:bg-surface-dark rounded-2xl p-8 text-center text-gray-400 text-xs">No orders yet today.</div>}
+                     {recentOrders.map((order, i) => (
+                        <div key={i} className="bg-white dark:bg-surface-dark p-3 rounded-[20px] shadow-sm border border-gray-100 dark:border-white/5 flex gap-4 active:scale-[0.98] transition-all">
+                           <div className="size-14 rounded-xl bg-gray-100 shrink-0 overflow-hidden">
+                              <img src={order.items?.[0]?.image || "https://placehold.co/100"} className="size-full object-cover" />
+                           </div>
+                           <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start mb-1">
+                                 <h4 className="text-sm font-bold text-secondary dark:text-white truncate pr-2">{order.items?.[0]?.name}</h4>
+                                 <span className="text-sm font-black text-[#06DC7F] shrink-0">{formatCurrency(Number(order.total) || Number(order.totalAmount) || 0)}</span>
                               </div>
-                              <div className="flex-1 min-w-0">
-                                 <div className="flex justify-between items-start mb-1">
-                                    <h4 className="text-sm font-bold text-secondary dark:text-white truncate pr-2">{order.items?.[0]?.name}</h4>
-                                    <span className="text-sm font-black text-[#06DC7F] shrink-0">{formatCurrency(Number(order.total) || Number(order.totalAmount) || 0)}</span>
-                                 </div>
-                                 <p className="text-[10px] text-gray-400 mb-2">{order.items?.length || 1} items • {new Date(order.createdAt?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                 <div className="flex items-center gap-2">
-                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide ${order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{order.status}</span>
-                                 </div>
+                              <p className="text-[10px] text-gray-400 mb-2">{order.items?.length || 1} items • {new Date(order.createdAt?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                              <div className="flex items-center gap-2">
+                                 <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide ${order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{order.status}</span>
                               </div>
                            </div>
-                        ))}
-                     </div>
+                        </div>
+                     ))}
                   </div>
-               </>
+               </div>
             )}
          </div>
 
@@ -236,5 +231,3 @@ const QuickAction: React.FC<{ icon: string; label: string; color: string; onClic
 );
 
 export default VendorDashboard;
-
-
