@@ -30,19 +30,11 @@ const AdminHubs: React.FC = () => {
       if (hubList.length > 0) {
         setHubs(hubList);
       } else {
-        // Keep mock data if empty
-        setHubs([
-          { id: 'mock-1', name: 'Hargeisa Central', location: 'Hargeisa', capacity: '2k', status: 'ACTIVE', load: 80, efficiency: '98%', riders: 12 },
-          { id: 'mock-2', name: 'Berbera Port', location: 'Berbera', capacity: '5k', status: 'ACTIVE', load: 45, efficiency: '92%', riders: 8 },
-        ]);
+        setHubs([]);
       }
     } catch (e) {
       console.error("Hub fetch error:", e);
-      // Fallback to mock on error
-      setHubs([
-        { id: 'mock-1', name: 'Hargeisa Central', location: 'Hargeisa', capacity: '2k', status: 'ACTIVE', load: 80, efficiency: '98%', riders: 12 },
-        { id: 'mock-2', name: 'Berbera Port', location: 'Berbera', capacity: '5k', status: 'ACTIVE', load: 45, efficiency: '92%', riders: 8 },
-      ]);
+      setHubs([]);
     } finally {
       setLoading(false);
     }

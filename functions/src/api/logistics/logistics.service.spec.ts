@@ -1,41 +1,54 @@
-
+import 'reflect-metadata';
 import { Test, TestingModule } from '@nestjs/testing';
 import { LogisticsService } from './logistics.service';
-import * as admin from 'firebase-admin';
 
 // Mock Firebase Admin
+const mockFirestore = {
+    collection: jest.fn(),
+    runTransaction: jest.fn()
+};
+
 jest.mock('firebase-admin', () => {
-    const mockFirestore = jest.fn().mockReturnValue({
-        collection: jest.fn(),
-        runTransaction: jest.fn()
-    });
     (mockFirestore as any).FieldValue = {
         serverTimestamp: jest.fn().mockReturnValue('TIMESTAMP')
     };
     (mockFirestore as any).GeoPoint = jest.fn((lat, lng) => ({ latitude: lat, longitude: lng }));
 
     return {
-        firestore: mockFirestore,
+        firestore: jest.fn().mockReturnValue(mockFirestore),
     };
 });
 
+// Chainable Query Mock
+const queryMock = {
+    where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    startAt: jest.fn().mockReturnThis(),
+    endAt: jest.fn().mockReturnThis(),
+    get: jest.fn().mockResolvedValue({ docs: [] })
+};
+
 describe('LogisticsService', () => {
     let service: LogisticsService;
-    let firestoreMock: any;
 
     beforeEach(async () => {
+        jest.clearAllMocks();
+
+        // Reset default collection mock to return queryMock for findNearbyRiders
+        // or docMock for updates. We'll refine per test.
+        mockFirestore.collection.mockReturnValue(queryMock);
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [LogisticsService],
         }).compile();
 
         service = module.get<LogisticsService>(LogisticsService);
-        firestoreMock = admin.firestore();
     });
 
     describe('updateLocation', () => {
-        it('should update rider location', async () => {
+        it('should update rider location with geohash', async () => {
             const setMock = jest.fn();
-            (firestoreMock.collection as jest.Mock).mockReturnValue({
+            mockFirestore.collection.mockReturnValue({
                 doc: jest.fn().mockReturnValue({
                     set: setMock
                 })
@@ -50,8 +63,24 @@ describe('LogisticsService', () => {
 
             expect(setMock).toHaveBeenCalledWith(expect.objectContaining({
                 currLocation: expect.objectContaining({ latitude: 40.7128 }),
-                status: 'ONLINE'
+                status: 'ONLINE',
+                geohash: expect.any(String) // Verify geohash is generated
             }), { merge: true });
+        });
+    });
+
+    describe('findNearbyRiders', () => {
+        it('should generate geo-queries', async () => {
+            // Mock return for queries
+            // We just want to see if it called startAt/endAt
+            mockFirestore.collection.mockReturnValue(queryMock);
+
+            await service.findNearbyRiders(40.7128, -74.0060, 5);
+
+            expect(queryMock.where).toHaveBeenCalledWith('status', '==', 'ONLINE');
+            // Geofire-common usually generates 4-9 hashes.
+            expect(queryMock.startAt).toHaveBeenCalled();
+            expect(queryMock.endAt).toHaveBeenCalled();
         });
     });
 
@@ -69,11 +98,11 @@ describe('LogisticsService', () => {
                 update: jest.fn()
             };
 
-            (firestoreMock.runTransaction as jest.Mock).mockImplementation(async (callback) => {
+            mockFirestore.runTransaction.mockImplementation(async (callback) => {
                 return await callback(transactionMock);
             });
 
-            (firestoreMock.collection as jest.Mock).mockReturnValue({
+            mockFirestore.collection.mockReturnValue({
                 doc: jest.fn().mockReturnValue({ id: 'ref' })
             });
 
@@ -91,10 +120,10 @@ describe('LogisticsService', () => {
                 })
             };
 
-            (firestoreMock.runTransaction as jest.Mock).mockImplementation(async (callback) => {
+            mockFirestore.runTransaction.mockImplementation(async (callback) => {
                 return await callback(transactionMock);
             });
-            (firestoreMock.collection as jest.Mock).mockReturnValue({
+            mockFirestore.collection.mockReturnValue({
                 doc: jest.fn().mockReturnValue({ id: 'ref' })
             });
 

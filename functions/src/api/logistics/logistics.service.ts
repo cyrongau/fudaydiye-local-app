@@ -2,6 +2,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { UpdateLocationDto, AssignJobDto } from './dto/logistics.dto';
+import * as geofire from 'geofire-common';
 
 @Injectable()
 export class LogisticsService {
@@ -16,8 +17,12 @@ export class LogisticsService {
         const { riderId, latitude, longitude, status } = updateLocationDto;
 
         try {
+            // Compute Geohash
+            const hash = geofire.geohashForLocation([latitude, longitude]);
+
             await this.db.collection('riders').doc(riderId).set({
                 currLocation: new admin.firestore.GeoPoint(latitude, longitude),
+                geohash: hash, // For Geo-Queries
                 status: status,
                 lastHeartbeat: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
@@ -44,10 +49,6 @@ export class LogisticsService {
                 const orderData = orderSnap.data()!;
                 if (orderData.riderId) throw new BadRequestException("Order already assigned");
 
-                // Check Rider Availability (Optional but recommended)
-                // const riderSnap = await t.get(riderRef);
-                // if(riderSnap.data().status !== 'ONLINE') ... 
-
                 t.update(orderRef, {
                     riderId: riderId,
                     status: 'DISPATCHED',
@@ -55,7 +56,7 @@ export class LogisticsService {
                 });
 
                 t.update(riderRef, {
-                    status: 'BUSY', // Or keep ONLINE but assign implementation specific logic
+                    status: 'BUSY',
                     currentOrderId: orderId
                 });
             });
@@ -69,35 +70,46 @@ export class LogisticsService {
     }
 
     async findNearbyRiders(latitude: number, longitude: number, radiusKm: number = 5) {
-        // Mock Geo-Query for now or use GeoFire logic if library installed.
-        // For prototype: Fetch all ONLINE riders and filter in memory (Not scalable but functional for demo)
+        const center: [number, number] = [latitude, longitude];
+        const radiusInM = radiusKm * 1000;
 
-        const ridersSnap = await this.db.collection('riders').where('status', '==', 'ONLINE').get();
-        const candidates = [];
+        // 1. Calculate Geohash Bounds
+        const bounds = geofire.geohashQueryBounds(center, radiusInM);
+        const promises = [];
 
-        for (const doc of ridersSnap.docs) {
-            const data = doc.data();
-            if (data.currLocation) {
-                const distance = this.calculateDistance(latitude, longitude, data.currLocation.latitude, data.currLocation.longitude);
-                if (distance <= radiusKm) {
-                    candidates.push({ id: doc.id, ...data, distance });
+        // 2. Query each bound (usually 4-9 queries)
+        for (const b of bounds) {
+            const q = this.db.collection('riders')
+                .where('status', '==', 'ONLINE')
+                .orderBy('geohash')
+                .startAt(b[0])
+                .endAt(b[1]);
+
+            promises.push(q.get());
+        }
+
+        // 3. Collect Results
+        const snapshots = await Promise.all(promises);
+        const matchingDocs = [];
+
+        for (const snap of snapshots) {
+            for (const doc of snap.docs) {
+                const data = doc.data();
+                const lat = data.currLocation.latitude;
+                const lng = data.currLocation.longitude;
+
+                // 4. Client-side filtering for exact distance (False positives removal)
+                const distanceInKm = geofire.distanceBetween([lat, lng], center);
+                const distanceInM = distanceInKm * 1000;
+
+                if (distanceInM <= radiusInM) {
+                    matchingDocs.push({ id: doc.id, ...data, distance: distanceInKm });
                 }
             }
         }
 
-        return candidates.sort((a, b) => a.distance - b.distance);
-    }
-
-    // Haversine Formula
-    private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-        const R = 6371; // km
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
+        // 5. Sort by Distance
+        return matchingDocs.sort((a, b) => a.distance - b.distance);
     }
 
     async updateRiderStatus(riderId: string, status: string) {

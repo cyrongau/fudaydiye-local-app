@@ -23,8 +23,8 @@ const AdminDispatchConsole: React.FC = () => {
             const ordersRes = await api.get('/orders?status=READY_FOR_PICKUP&riderId=null');
             setOrders(ordersRes.data || []);
 
-            // Fetch Nearby Riders (Mock lat/lng for now, or center of city)
-            const ridersRes = await api.get('/logistics/riders/nearby?lat=-1.2921&lng=36.8219&radius=10');
+            // Fetch Nearby Riders (Hargeisa Center)
+            const ridersRes = await api.get('/logistics/riders/nearby?lat=9.5624&lng=44.0770&radius=10');
             // Normalize rider location
             const normalizedRiders = (ridersRes.data || []).map((r: any) => ({
                 ...r,
