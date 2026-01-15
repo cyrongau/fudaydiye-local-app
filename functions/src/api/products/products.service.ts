@@ -1,6 +1,7 @@
-
 import { Injectable, Logger } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
@@ -66,6 +67,47 @@ export class ProductsService {
             return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         } catch (error) {
             this.logger.error(`Failed to fetch products for vendor ${vendorId}: ${error}`);
+            throw error;
+        }
+    }
+    async create(createProductDto: CreateProductDto): Promise<any> {
+        try {
+            const productRef = this.db.collection('products').doc();
+            const productData = {
+                ...createProductDto,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                // Ensure defaults if missing
+                salePrice: createProductDto.salePrice || 0,
+                rating: 0,
+                reviewsCount: 0
+            };
+            await productRef.set(productData);
+            return { id: productRef.id, ...productData };
+        } catch (error) {
+            this.logger.error(`Failed to create product: ${error}`);
+            throw error;
+        }
+    }
+
+    async update(id: string, updateProductDto: UpdateProductDto): Promise<void> {
+        try {
+            const productRef = this.db.collection('products').doc(id);
+            await productRef.update({
+                ...updateProductDto,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (error) {
+            this.logger.error(`Failed to update product ${id}: ${error}`);
+            throw error;
+        }
+    }
+
+    async remove(id: string): Promise<void> {
+        try {
+            await this.db.collection('products').doc(id).delete();
+        } catch (error) {
+            this.logger.error(`Failed to delete product ${id}: ${error}`);
             throw error;
         }
     }

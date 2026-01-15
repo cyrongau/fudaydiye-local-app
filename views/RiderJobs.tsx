@@ -7,6 +7,7 @@ import { db } from '../lib/firebase';
 import { Order } from '../types';
 import { useAuth } from '../Providers';
 import HeaderNotification from '../components/HeaderNotification';
+import { RiderService } from '../src/lib/services/riderService';
 
 interface MeshBatch {
   id: string;
@@ -95,12 +96,7 @@ const RiderJobs: React.FC = () => {
   const handleAcceptSingle = async (order: Order) => {
     if (!user) return;
     try {
-      await updateDoc(doc(db, "orders", order.id), {
-        status: 'ACCEPTED',
-        riderId: user.uid,
-        riderName: profile?.fullName || "Dispatch Captain",
-        acceptedAt: serverTimestamp()
-      });
+      await RiderService.acceptJob(order.id, user.uid);
       navigate(`/rider/pickup/${order.id}`);
     } catch (err) { alert("Node claim failure."); }
   };

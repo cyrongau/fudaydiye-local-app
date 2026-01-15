@@ -1,0 +1,1 @@
+{"version":3,"file":"logistics.module.js","sourceRoot":"","sources":["../../../src/api/logistics/logistics.module.ts"],"names":[],"mappings":";;;;;;;;;AACA,2CAAwC;AACxC,iEAA6D;AAC7D,2DAAuD;AAMhD,IAAM,eAAe,GAArB,MAAM,eAAe;CAAI,CAAA;AAAnB,eAAe;IAJ3B,IAAA,eAAM,EAAC;QACJ,WAAW,EAAE,CAAC,0CAAmB,CAAC;QAClC,SAAS,EAAE,CAAC,oCAAgB,CAAC;KAChC,CAAC;GACW,eAAe,CAAI;AAAnB,0CAAe"}

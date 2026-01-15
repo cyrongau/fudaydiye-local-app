@@ -71,7 +71,7 @@ const VendorLiveSaleSetup: React.FC = () => {
           const loadedProducts: Product[] = [];
           // 1. Try to load from productIds array (new way)
           if (data.productIds && Array.isArray(data.productIds)) {
-            data.productIds.forEach(id => {
+            (data.productIds || []).forEach(id => {
               const p = inventory.find(inv => inv.id === id);
               if (p) loadedProducts.push(p);
             });

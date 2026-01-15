@@ -75,6 +75,39 @@ let ProductsService = ProductsService_1 = class ProductsService {
             throw error;
         }
     }
+    async create(createProductDto) {
+        try {
+            const productRef = this.db.collection('products').doc();
+            const productData = Object.assign(Object.assign({}, createProductDto), { createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(), 
+                // Ensure defaults if missing
+                salePrice: createProductDto.salePrice || 0, rating: 0, reviewsCount: 0 });
+            await productRef.set(productData);
+            return Object.assign({ id: productRef.id }, productData);
+        }
+        catch (error) {
+            this.logger.error(`Failed to create product: ${error}`);
+            throw error;
+        }
+    }
+    async update(id, updateProductDto) {
+        try {
+            const productRef = this.db.collection('products').doc(id);
+            await productRef.update(Object.assign(Object.assign({}, updateProductDto), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+        }
+        catch (error) {
+            this.logger.error(`Failed to update product ${id}: ${error}`);
+            throw error;
+        }
+    }
+    async remove(id) {
+        try {
+            await this.db.collection('products').doc(id).delete();
+        }
+        catch (error) {
+            this.logger.error(`Failed to delete product ${id}: ${error}`);
+            throw error;
+        }
+    }
 };
 ProductsService = ProductsService_1 = __decorate([
     (0, common_1.Injectable)(),

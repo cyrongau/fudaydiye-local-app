@@ -18,7 +18,7 @@ import {
 import { db } from '../../../lib/firebase';
 
 import { LiveSession, ChatMessage, CreateSessionPayloadSchema, ChatMessageSchema } from '../schemas/liveSession';
-import { Product } from '../schemas/product';
+import { Product } from '../../../types';
 
 export type { LiveSession, ChatMessage, Product };
 
@@ -129,17 +129,7 @@ class LiveStreamService {
         await updateDoc(doc(db, "live_sessions", sessionId), updateData);
     }
 
-    /**
-     * Pin a product to the live stream for viewers to see.
-     */
-    async pinProductToStream(sessionId: string, product: Product): Promise<void> {
-        await updateDoc(doc(db, "live_sessions", sessionId), {
-            featuredProductId: product.id,
-            featuredProductName: product.name,
-            featuredProductPrice: product.price,
-            featuredProductImg: product.images?.[0] || "https://placehold.co/100" // Fallback should ideally be handled cleanly
-        });
-    }
+
 
     /**
      * Create a new live session.
@@ -204,7 +194,7 @@ class LiveStreamService {
             await updateDoc(doc(db, "live_sessions", sessionId), {
                 featuredProductId: product.id,
                 featuredProductName: product.name,
-                featuredProductPrice: product.basePrice || product.price || 0, // Fallback to 0 if undefined
+                featuredProductPrice: product.basePrice || product.salePrice || 0, // Fallback to 0 if undefined
                 featuredProductImg: product.images?.[0] || null
             });
         } catch (error) {

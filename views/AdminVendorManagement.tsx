@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, getDocs, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { userService } from '../src/lib/services/userService';
 
 import SystemAlert from '../components/SystemAlert';
 import { AuditService } from '../lib/auditService';
@@ -41,9 +42,8 @@ const AdminVendorManagement: React.FC = () => {
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const q = query(collection(db, "users"), where("role", "==", roleFilter));
-        const snap = await getDocs(q);
-        const userData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Use UserService instead of direct Firestore query
+        const userData = await userService.getAllUsers(roleFilter);
         setUsers(userData);
       } catch (e) {
         console.error("User fetch error:", e);
@@ -56,18 +56,16 @@ const AdminVendorManagement: React.FC = () => {
   }, [roleFilter, alertConfig.isOpen]);
 
   const handleUpdateStatus = (userId: string, action: 'SUSPEND' | 'REINSTATE' | 'DELETE') => {
-    // ... (use userId logic, largely same but generic)
     if (action === 'SUSPEND') {
       showConfirm(
         'Suspend User Access?',
         'This will lock the user account. Action reversible by Admin.',
         async () => {
           try {
-            await updateDoc(doc(db, "users", userId), {
-              status: 'SUSPENDED', // Normalize status field if possible, or use vendorStatus for now
-              vendorStatus: 'SUSPENDED', // Legacy support
+            await userService.updateStatus(userId, {
+              status: 'SUSPENDED',
+              vendorStatus: 'SUSPENDED',
               isAccountLocked: true,
-              lastAdminAction: serverTimestamp()
             });
             await AuditService.logAction('ADMIN', 'Current Admin', 'SUSPEND', `Suspended User ${userId}`, 'HIGH', 'USER', userId);
             showAlert('Protocol Executed', 'User account suspended.', 'SUCCESS');
@@ -80,16 +78,14 @@ const AdminVendorManagement: React.FC = () => {
         'DANGER'
       );
     } else if (action === 'REINSTATE') {
-      // Similar logic for REINSTATE
       showConfirm('Reinstate Access?', 'Restore user access level.', async () => {
-        await updateDoc(doc(db, "users", userId), { vendorStatus: 'ACTIVE', status: 'ACTIVE', isAccountLocked: false });
+        await userService.updateStatus(userId, { vendorStatus: 'ACTIVE', status: 'ACTIVE', isAccountLocked: false });
         showAlert('Access Restored', 'User account active.', 'SUCCESS');
         setAlertConfig(prev => ({ ...prev, isOpen: false }));
       }, 'CONFIRM');
     } else if (action === 'DELETE') {
-      // Similar logic for DELETE
       showConfirm('Delete User?', 'Irreversible action.', async () => {
-        await updateDoc(doc(db, "users", userId), { vendorStatus: 'DELETED', status: 'DELETED', isAccountLocked: true });
+        await userService.updateStatus(userId, { vendorStatus: 'DELETED', status: 'DELETED', isAccountLocked: true });
         showAlert('User Deleted', 'Account marked for deletion.', 'SUCCESS');
         setAlertConfig(prev => ({ ...prev, isOpen: false }));
       }, 'DANGER');
@@ -98,9 +94,8 @@ const AdminVendorManagement: React.FC = () => {
 
   const handleToggleStream = async (userId: string, currentStatus: boolean) => {
     try {
-      await updateDoc(doc(db, "users", userId), {
-        canStream: !currentStatus,
-        lastAdminAction: serverTimestamp()
+      await userService.updateStatus(userId, {
+        canStream: !currentStatus
       });
       showAlert('Protocol Executed', `Live Stream Access has been ${!currentStatus ? 'GRANTED' : 'REVOKED'}.`, 'SUCCESS');
     } catch (e) {

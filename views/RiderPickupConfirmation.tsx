@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc, updateDoc, serverTimestamp, addDoc, collection, onSnapshot, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order, UserProfile } from '../types';
+import { RiderService } from '../src/lib/services/riderService';
 
 declare const google: any;
 
@@ -140,11 +141,8 @@ const RiderPickupConfirmation: React.FC = () => {
     if (!order) return;
     setIsConfirming(true);
     try {
-      await updateDoc(doc(db, "orders", order.id), {
-        status: 'SHIPPED',
-        pickupVerifiedAt: serverTimestamp(),
-        lastStatusUpdate: serverTimestamp()
-      });
+      // Use Backend Service
+      await RiderService.pickupJob(order.id, order.riderId!);
 
       await clearAssociatedNotifications();
 

@@ -5,6 +5,7 @@ import { useAuth } from '../Providers';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import BottomNav from '../components/BottomNav';
+import { RiderService } from '../src/lib/services/riderService';
 
 const RiderStatusUpdates: React.FC = () => {
   const navigate = useNavigate();
@@ -23,11 +24,9 @@ const RiderStatusUpdates: React.FC = () => {
     setIsUpdating(true);
     try {
       const nextStatus = isOnline ? 'OFFLINE' : 'ONLINE';
-      await updateDoc(doc(db, "users", user.uid), {
-        status: nextStatus,
-        lastHeartbeat: serverTimestamp()
-      });
+      await RiderService.updateStatus(user.uid, nextStatus);
       setIsOnline(!isOnline);
+      // Optimistically update profile fallback
     } catch (err) {
       alert("Failed to synchronize status node.");
     } finally {
@@ -80,8 +79,8 @@ const RiderStatusUpdates: React.FC = () => {
 
       <main className="p-6 flex-1 flex flex-col gap-6 overflow-y-auto pb-32 no-scrollbar animate-in fade-in duration-500">
         <section className={`p-8 rounded-[40px] shadow-2xl transition-all duration-500 border-2 ${isOnline
-            ? 'bg-secondary border-primary/30 text-white'
-            : 'bg-white dark:bg-surface-dark border-gray-100 dark:border-gray-800 text-gray-400'
+          ? 'bg-secondary border-primary/30 text-white'
+          : 'bg-white dark:bg-surface-dark border-gray-100 dark:border-gray-800 text-gray-400'
           }`}>
           <div className="flex justify-between items-start mb-10">
             <div>

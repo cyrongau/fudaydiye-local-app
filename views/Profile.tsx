@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { useWallet, useAuth } from '../Providers';
-import { doc, updateDoc, increment, collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, limit, deleteDoc } from 'firebase/firestore';
+import { doc, collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, deleteDoc, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Transaction } from '../types';
+import { walletService } from '../src/lib/services/walletService';
+import { userService } from '../src/lib/services/userService';
 
 interface ProfileProps {
   isAuthenticated: boolean;
@@ -74,6 +76,10 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
     }
   };
 
+
+
+  // ... inside component
+
   const handleTopUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !topUpAmount || parseFloat(topUpAmount) <= 0) return;
@@ -82,22 +88,9 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
     const amount = parseFloat(topUpAmount);
 
     try {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
-        walletBalance: increment(amount)
-      });
+      await walletService.deposit(user.uid, amount, selectedGateway);
 
-      await addDoc(collection(db, "transactions"), {
-        userId: user.uid,
-        type: 'DEPOSIT',
-        amount: amount,
-        balanceBefore: balance,
-        balanceAfter: balance + amount,
-        description: `Direct Top - up via ${selectedGateway} `,
-        referenceId: `TOP - ${Math.random().toString(36).substring(7).toUpperCase()} `,
-        createdAt: serverTimestamp()
-      });
-
+      // Legacy Notification (Client-side for now)
       await addDoc(collection(db, "notifications"), {
         userId: user.uid,
         title: "Wallet Refilled",
@@ -123,13 +116,14 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
     setIsPromoterLoading(true);
     try {
       const nextStatus = !profile?.isPromoter;
-      await updateDoc(doc(db, "users", user.uid), {
-        isPromoter: nextStatus,
-        referralEarnings: profile?.referralEarnings || 0
+      await userService.updateProfile(user.uid, {
+        // @ts-ignore - profile type might need updating or DTO allows arbitrary fields
+        isPromoter: nextStatus
       });
       alert(nextStatus ? "Hambalyo! You are now a Fudaydiye Promoter." : "Promoter status deactivated.");
     } catch (err) {
       console.error(err);
+      alert("Failed to update status.");
     } finally {
       setIsPromoterLoading(false);
     }

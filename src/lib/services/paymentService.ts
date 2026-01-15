@@ -1,84 +1,76 @@
-import { db, functions } from '../../../lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
+import { api } from '../api';
+import { Order, CartItem } from '../../../types';
+import { auth } from '../../../lib/firebase'; // Need auth for userId if not passed
 
-import { OrderPayload, OrderPayloadSchema } from '../schemas/order';
-
-export type { OrderPayload };
-
-export interface PaymentPayload {
-    orderId: string;
+export interface CreateOrderPayload {
+    cartItems: CartItem[];
+    recipientName: string;
+    recipientPhone: string;
+    recipientAddress: string;
     paymentMethod: string;
-    paymentDetails: { last4?: string; phone?: string; mobile?: string;[key: string]: any };
-    amount: number;
-    currency: string;
+    deliveryFee: number;
+    isAtomic: boolean;
+    recipientId: string | null;
+    paymentDetails?: any;
+    savePayment?: boolean;
+    syncCartId?: string | null;
+    currency?: string;
+    exchangeRate?: number;
 }
 
-class PaymentService {
+export interface PaymentInitiationPayload {
+    orderId: string;
+    paymentMethod: string;
+    paymentDetails?: any;
+    amount?: number; // Optional for backend, but good for check
+    currency?: string;
+}
+
+export class PaymentService {
+
     /**
-     * Fetch the current SLSH to USD exchange rate from Firestore
+     * Create a new order via NestJS API
+     */
+    async createOrder(payload: CreateOrderPayload): Promise<{ success: boolean; orderId: string; orderNumber: string }> {
+        try {
+            // Ensure payload matches CreateOrderDto
+            const response = await api.post('/orders', payload);
+            return response.data;
+        } catch (error: any) {
+            console.error("PaymentService: Create Order Failed", error);
+            throw new Error(error.response?.data?.message || "Order Creation Failed");
+        }
+    }
+
+    /**
+     * Initiate payment via NestJS API
+     */
+    async initiatePayment(payload: PaymentInitiationPayload): Promise<{ success: boolean; status: string; message?: string }> {
+        try {
+            // Need to pass userId securely.
+            // For now, if payload doesn't have it, try to get from auth?
+            // Checkout.tsx doesn't pass userId explicitly in paymentPayload!
+            // But we can get it from auth.currentUser or payload.
+            const userId = auth.currentUser?.uid || 'guest';
+
+            const response = await api.post(`/orders/${payload.orderId}/pay`, {
+                userId: userId,
+                paymentMethod: payload.paymentMethod,
+                paymentDetails: payload.paymentDetails
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error("PaymentService: Payment Initiation Failed", error);
+            throw new Error(error.response?.data?.message || "Payment Initiation Failed");
+        }
+    }
+
+    /**
+     * Get current exchange rate (Mock for now, can be connected to real API or Firestore)
      */
     async getExchangeRate(): Promise<number> {
-        try {
-            const rateSnap = await getDoc(doc(db, "settings", "exchange_rates"));
-            if (rateSnap.exists()) {
-                return rateSnap.data().rate || 8500;
-            }
-            return 8500; // Default fallback
-        } catch (error) {
-            console.error("PaymentService: Failed to fetch exchange rate", error);
-            return 8500;
-        }
-    }
-
-    /**
-     * Call the 'createOrder' NestJS API Endpoint
-     */
-    async createOrder(payload: OrderPayload): Promise<{ success: boolean; orderId?: string; message?: string }> {
-        try {
-            // Validate Payload
-            const validatedPayload = OrderPayloadSchema.parse(payload);
-
-            const isDev = import.meta.env.DEV;
-            const projectId = 'fudaydiye-commerce';
-            const region = 'us-central1';
-            const baseUrl = isDev
-                ? `http://localhost:5001/${projectId}/${region}/api`
-                : `https://${region}-${projectId}.cloudfunctions.net/api`;
-
-            const response = await fetch(`${baseUrl}/orders`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(validatedPayload)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Order creation failed');
-            }
-
-            const result = await response.json();
-            return result;
-        } catch (error: any) {
-            console.error("PaymentService: Create Order Error", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Call the 'initiatePayment' Cloud Function
-     */
-    async initiatePayment(payload: PaymentPayload): Promise<{ success: boolean; status?: string; message?: string }> {
-        try {
-            const initiatePaymentFn = httpsCallable(functions, 'initiatePayment');
-            const result: any = await initiatePaymentFn(payload);
-            return result.data;
-        } catch (error) {
-            console.error("PaymentService: Initiate Payment Error", error);
-            throw error;
-        }
+        // In future, fetch from 'settings/exchange' doc
+        return 26000; // 1 USD = 26,000 SLSH
     }
 }
 

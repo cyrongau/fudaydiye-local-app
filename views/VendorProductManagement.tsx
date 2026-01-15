@@ -1,9 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../Providers';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, deleteDoc, orderBy } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { ProductService } from '../src/lib/services/productService';
 import { Product, ProductVariation, ProductType, CategoryNode } from '../types';
 
 const PRODUCT_TAGS = ['FEATURED', 'HOT DEAL', 'NEW', 'BEST SELLER', 'LIMITED'];
@@ -45,37 +43,23 @@ const VendorProductManagement: React.FC = () => {
       if (!user) return;
       setLoading(true);
 
-      // Products listener
-      const qP = query(collection(db, "products"), where("vendorId", "==", user.uid));
-      const unsubscribeProducts = onSnapshot(qP, (snapshot) => {
-         const prods = snapshot.docs.map(d => {
-            const data = d.data();
-            return {
-               id: d.id,
-               ...data,
-               productType: data.productType || 'SIMPLE',
-               category: data.category || 'Uncategorized'
-            } as any;
-         });
-         prods.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      // Subscribe to Products
+      const unsubProducts = ProductService.subscribeToVendorProducts(user.uid, (prods) => {
          setProducts(prods);
          setLoading(false);
       });
 
-      // Categories listener
-      const qC = query(collection(db, "categories"), orderBy("name", "asc"));
-      const unsubscribeCategories = onSnapshot(qC, (snapshot) => {
-         const cats = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CategoryNode));
+      // Subscribe to Categories
+      const unsubCategories = ProductService.subscribeToCategories((cats) => {
          setCategories(cats);
-         // Set default category if not set
          if (cats.length > 0 && !formState.category) {
             setFormState(prev => ({ ...prev, category: cats[0].name }));
          }
       });
 
       return () => {
-         unsubscribeProducts();
-         unsubscribeCategories();
+         unsubProducts();
+         unsubCategories();
       };
    }, [user]);
 
@@ -143,21 +127,13 @@ const VendorProductManagement: React.FC = () => {
       const payload = {
          ...formState,
          description: longDescription,
-         basePrice: Number(formState.basePrice),
-         salePrice: Number(formState.salePrice) || 0,
-         baseStock: Number(formState.baseStock),
          vendorId: user.uid,
          vendor: profile?.businessName || profile?.fullName || "Verified Vendor",
-         updatedAt: serverTimestamp(),
-         hasVariations: formState.productType === 'VARIABLE'
+         // Other fields handled by service
       };
 
       try {
-         if (editingId) {
-            await updateDoc(doc(db, "products", editingId), payload);
-         } else {
-            await addDoc(collection(db, "products"), { ...payload, createdAt: serverTimestamp(), rating: 5, reviewsCount: 0 });
-         }
+         await ProductService.upsertProduct(payload, editingId);
          setShowModal(false);
          setEditingId(null);
       } catch (err) { alert("Operational Failure: Sync failed."); } finally { setIsSaving(false); }
@@ -297,7 +273,7 @@ const VendorProductManagement: React.FC = () => {
                               <td className="py-5 px-8 text-right">
                                  <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                                     <button onClick={() => { setEditingId(p.id); setFormState(p); setShowModal(true); }} className="size-9 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-primary transition-all"><span className="material-symbols-outlined text-[18px]">edit</span></button>
-                                    <button onClick={() => deleteDoc(doc(db, "products", p.id))} className="size-9 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-red-500 hover:bg-red-50 transition-all"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                                    <button onClick={() => ProductService.deleteProduct(p.id)} className="size-9 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-red-500 hover:bg-red-50 transition-all"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                                  </div>
                               </td>
                            </tr>
@@ -490,7 +466,7 @@ const VendorProductManagement: React.FC = () => {
                               type="button"
                               onClick={() => {
                                  if (confirm('Are you sure you want to delete this listing permanently?')) {
-                                    deleteDoc(doc(db, "products", editingId));
+                                    ProductService.deleteProduct(editingId);
                                     setShowModal(false);
                                  }
                               }}

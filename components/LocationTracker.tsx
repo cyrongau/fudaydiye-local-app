@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useAuth } from '../Providers';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { RiderService } from '../src/lib/services/riderService';
 
 const LocationTracker: React.FC = () => {
     const { user, role, profile } = useAuth();
@@ -23,18 +23,19 @@ const LocationTracker: React.FC = () => {
                     const latOffset = (Math.random() - 0.5) * 0.01; // ~1km range variation
                     const lngOffset = (Math.random() - 0.5) * 0.01;
 
-                    const newGeo = {
-                        lat: BASE_LAT + latOffset,
-                        lng: BASE_LNG + lngOffset,
-                        lastUpdate: new Date().toISOString()
-                    };
 
-                    await updateDoc(doc(db, "users", user.uid), {
-                        currentGeo: newGeo,
-                        lastHeartbeat: serverTimestamp()
+                    const latitude = BASE_LAT + latOffset;
+                    const longitude = BASE_LNG + lngOffset;
+
+                    // Send to Backend via API
+                    await RiderService.sendHeartbeat({
+                        riderId: user.uid,
+                        latitude,
+                        longitude,
+                        status: 'ONLINE' // or profile?.status if validated
                     });
 
-                    console.log("Tracker: Location sync sent.", newGeo);
+                    console.log("Tracker: Heartbeat sent.", { latitude, longitude });
                 } catch (err) {
                     console.error("Tracker: Sync failed.", err);
                 }

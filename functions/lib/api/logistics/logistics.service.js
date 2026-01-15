@@ -1,0 +1,210 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var LogisticsService_1;
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.LogisticsService = void 0;
+const common_1 = require("@nestjs/common");
+const admin = require("firebase-admin");
+let LogisticsService = LogisticsService_1 = class LogisticsService {
+    constructor() {
+        this.logger = new common_1.Logger(LogisticsService_1.name);
+        this.db = admin.firestore();
+    }
+    async updateLocation(updateLocationDto) {
+        const { riderId, latitude, longitude, status } = updateLocationDto;
+        try {
+            await this.db.collection('riders').doc(riderId).set({
+                currLocation: new admin.firestore.GeoPoint(latitude, longitude),
+                status: status,
+                lastHeartbeat: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            return { success: true };
+        }
+        catch (error) {
+            this.logger.error(`Location update failed for ${riderId}:`, error);
+            throw new common_1.InternalServerErrorException("Failed to update location.");
+        }
+    }
+    async assignJob(assignJobDto) {
+        const { orderId, riderId } = assignJobDto;
+        // Transaction to ensure atomicity (Job not double-booked)
+        try {
+            await this.db.runTransaction(async (t) => {
+                const orderRef = this.db.collection('orders').doc(orderId);
+                const orderSnap = await t.get(orderRef);
+                const riderRef = this.db.collection('riders').doc(riderId);
+                if (!orderSnap.exists)
+                    throw new common_1.NotFoundException("Order not found");
+                const orderData = orderSnap.data();
+                if (orderData.riderId)
+                    throw new common_1.BadRequestException("Order already assigned");
+                // Check Rider Availability (Optional but recommended)
+                // const riderSnap = await t.get(riderRef);
+                // if(riderSnap.data().status !== 'ONLINE') ... 
+                t.update(orderRef, {
+                    riderId: riderId,
+                    status: 'DISPATCHED',
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                t.update(riderRef, {
+                    status: 'BUSY',
+                    currentOrderId: orderId
+                });
+            });
+            return { success: true, message: "Job assigned" };
+        }
+        catch (error) {
+            this.logger.error(`Dispatch failed:`, error);
+            throw error.status ? error : new common_1.InternalServerErrorException("Dispatch failed");
+        }
+    }
+    async findNearbyRiders(latitude, longitude, radiusKm = 5) {
+        // Mock Geo-Query for now or use GeoFire logic if library installed.
+        // For prototype: Fetch all ONLINE riders and filter in memory (Not scalable but functional for demo)
+        const ridersSnap = await this.db.collection('riders').where('status', '==', 'ONLINE').get();
+        const candidates = [];
+        for (const doc of ridersSnap.docs) {
+            const data = doc.data();
+            if (data.currLocation) {
+                const distance = this.calculateDistance(latitude, longitude, data.currLocation.latitude, data.currLocation.longitude);
+                if (distance <= radiusKm) {
+                    candidates.push(Object.assign(Object.assign({ id: doc.id }, data), { distance }));
+                }
+            }
+        }
+        return candidates.sort((a, b) => a.distance - b.distance);
+    }
+    // Haversine Formula
+    calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+    async updateRiderStatus(riderId, status) {
+        try {
+            await this.db.collection('riders').doc(riderId).update({
+                status: status,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            return { success: true };
+        }
+        catch (error) {
+            this.logger.error(`Status update failed for ${riderId}`, error);
+            throw new common_1.InternalServerErrorException("Failed to update status");
+        }
+    }
+    async updateJobStatus(orderId, status, riderId) {
+        try {
+            await this.db.runTransaction(async (t) => {
+                const orderRef = this.db.collection('orders').doc(orderId);
+                const riderRef = this.db.collection('riders').doc(riderId);
+                const orderSnap = await t.get(orderRef);
+                if (!orderSnap.exists)
+                    throw new common_1.NotFoundException("Order not found");
+                const orderData = orderSnap.data();
+                if (orderData.riderId !== riderId) {
+                    throw new common_1.BadRequestException("Rider does not own this job");
+                }
+                let updates = {
+                    status: status,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                };
+                // If DELIVERED or CANCELLED, free up the rider?
+                // Or keep them BUSY until they manually go ONLINE?
+                // Usually, DELIVERED -> ONLINE (Auto) or BUSY (remain busy).
+                // Let's assume Auto-Online on Delivery for MVP simplicity, or just keep BUSY.
+                t.update(orderRef, updates);
+                if (status === 'DELIVERED') {
+                    // Check logic from RiderDeliveryConfirmation
+                    const orderTotal = orderData.total || 0;
+                    const deliveryFee = orderData.deliveryFee || 3.50;
+                    const platformFee = orderTotal * 0.10;
+                    const merchantShare = orderTotal * 0.90; // Assuming total includes goods only, if total includes delivery fee this math changes. Stick to client logic.
+                    // Identify Actors
+                    const vendorId = orderData.vendorId;
+                    // Implementation Plan says: Wallet Entity (Firestore: wallets/{userId})
+                    // But RiderDeliveryConfirmation uses `users` collection for walletBalance.
+                    // FinanceService uses `wallets`.
+                    // MIGRATION CONFLICT: FinanceService uses `wallets` collection. Legacy Frontend uses `users` doc fields.
+                    // To follow NEW ARCHITECTURE, we must use `wallets`.
+                    // BUT if the Frontend expects `users` to have balance, we might break UI.
+                    // WalletView uses `FinanceService.getBalance` which reads `wallets`.
+                    // So we should write to `wallets`.
+                    const vendorWalletRef = this.db.collection('wallets').doc(vendorId);
+                    const riderWalletRef = this.db.collection('wallets').doc(riderId);
+                    const adminWalletRef = this.db.collection('wallets').doc("system_super_admin");
+                    const txRef = this.db.collection('transactions').doc();
+                    // Update Order
+                    t.update(orderRef, {
+                        status: 'DELIVERED',
+                        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                    // Free Rider
+                    t.update(riderRef, {
+                        currentOrderId: admin.firestore.FieldValue.delete(),
+                        status: 'ONLINE',
+                        lastAction: 'JOB_COMPLETED'
+                    });
+                    // 1. Credit Rider (Earning)
+                    t.set(riderWalletRef, {
+                        balance: admin.firestore.FieldValue.increment(deliveryFee),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        role: 'RIDER' // Ensure doc exists
+                    }, { merge: true });
+                    // 2. Credit Vendor (Sale Share)
+                    t.set(vendorWalletRef, {
+                        balance: admin.firestore.FieldValue.increment(merchantShare),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        role: 'VENDOR'
+                    }, { merge: true });
+                    // 3. Credit Admin (Platform Fee)
+                    t.set(adminWalletRef, {
+                        balance: admin.firestore.FieldValue.increment(platformFee),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        role: 'ADMIN'
+                    }, { merge: true });
+                    // 4. Create Transaction Record (Rider Earning)
+                    t.set(txRef, {
+                        userId: riderId,
+                        type: 'EARNING',
+                        amount: deliveryFee,
+                        status: 'COMPLETED',
+                        referenceId: orderId,
+                        description: `Dispatch Earning for Order #${orderData.orderNumber || orderId}`,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                    // Optional: Create Transaction Records for Vendor and Admin? 
+                    // For MVP, focus on Rider Earning visibility.
+                }
+                else {
+                    t.update(orderRef, updates);
+                }
+            });
+            return { success: true };
+        }
+        catch (error) {
+            this.logger.error(`Job update failed for ${orderId}`, error);
+            throw error.status ? error : new common_1.InternalServerErrorException("Failed to update job");
+        }
+    }
+};
+LogisticsService = LogisticsService_1 = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [])
+], LogisticsService);
+exports.LogisticsService = LogisticsService;
+//# sourceMappingURL=logistics.service.js.map

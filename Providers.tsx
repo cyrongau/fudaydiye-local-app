@@ -77,20 +77,22 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     const [cart, setCart] = useState<CartItem[]>([]);
     const [syncCartId, setSyncCartId] = useState<string | null>(null);
+    const [walletBalance, setWalletBalance] = useState(0);
 
     useEffect(() => {
         let unsubProfile: (() => void) | undefined;
+        let unsubWallet: (() => void) | undefined;
 
         const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
             if (unsubProfile) unsubProfile();
+            if (unsubWallet) unsubWallet();
             setUser(fbUser);
 
             if (fbUser) {
-                // If user is anonymous, we don't fetch profile (it doesn't exist yet)
-                // We just set the syncCartId to the uid
                 setSyncCartId(fbUser.uid);
 
                 if (!fbUser.isAnonymous) {
+                    // 1. Profile Sync
                     unsubProfile = onSnapshot(doc(db, "users", fbUser.uid), (snap) => {
                         if (snap.exists()) {
                             const data = snap.data() as UserProfile;
@@ -105,17 +107,26 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
                         console.error("Profile sync error:", error);
                         setLoading(false);
                     });
+
+                    // 2. Wallet Sync (New Backend Schema)
+                    unsubWallet = onSnapshot(doc(db, "wallets", fbUser.uid), (snap) => {
+                        if (snap.exists()) {
+                            // @ts-ignore
+                            setWalletBalance(snap.data().balance || 0);
+                        } else {
+                            setWalletBalance(0);
+                        }
+                    });
                 } else {
                     setProfile(null);
-                    setRole('GUEST'); // Pseudo-role for UI check
+                    setRole('GUEST');
                     setLoading(false);
+                    setWalletBalance(0);
                 }
             } else {
-                // No user? Auto sign-in anonymously
                 setLoading(true);
                 signInAnonymously(auth).catch((err) => {
                     console.error("Anon Auth Failed", err);
-                    // Fallback to LocalStorage Guest ID if Anon Auth is disabled/fails
                     let guestId = localStorage.getItem('fudaydiye_guest_cart_id');
                     if (!guestId) {
                         guestId = 'guest_' + Math.random().toString(36).substring(7);
@@ -130,6 +141,7 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
         return () => {
             unsubAuth();
             if (unsubProfile) unsubProfile();
+            if (unsubWallet) unsubWallet();
         };
     }, []);
 
@@ -266,7 +278,7 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
             <ToastProvider>
                 <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQty, clearCart, cartTotal, syncCartId }}>
                     <WishlistContext.Provider value={{ wishlist, addToWishlist, removeFromWishlist, isInWishlist }}>
-                        <WalletContext.Provider value={{ balance: profile?.walletBalance || 0, topUp: (a) => console.log(a) }}>
+                        <WalletContext.Provider value={{ balance: walletBalance, topUp: (a) => console.log('Use walletService.deposit', a) }}>
                             {children}
                         </WalletContext.Provider>
                     </WishlistContext.Provider>

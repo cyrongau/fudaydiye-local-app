@@ -95,11 +95,10 @@ const VendorInventoryStatus: React.FC = () => {
             ]
          });
 
-         if (typeof response.text === 'function') {
-            setActiveAnalysis(response.text());
+         if (typeof (response as any).text === 'function') {
+            setActiveAnalysis((response as any).text());
          } else {
-            // @ts-ignore
-            setActiveAnalysis(response.text || JSON.stringify(response));
+            setActiveAnalysis("Analysis Complete.");
          }
       } catch (err) {
          console.error("AI Error:", err);

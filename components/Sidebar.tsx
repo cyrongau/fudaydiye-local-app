@@ -33,7 +33,7 @@ const VENDOR_ITEMS: SidebarItem[] = [
   { icon: 'inventory_2', path: '/vendor/management', label: 'Catalog' },
   { icon: 'inventory', path: '/vendor/inventory', label: 'Stock Logic' },
   { icon: 'bar_chart', path: '/vendor/analytics', label: 'Growth Engine' },
-  { icon: 'account_balance_wallet', path: '/vendor/earnings', label: 'Earning Ledger' },
+  { icon: 'account_balance_wallet', path: '/wallet', label: 'Earning Ledger' },
   { icon: 'hub', path: '/vendor/stores', label: 'Branches' },
   { icon: 'group', path: '/vendor/staff', label: 'Personnel' },
 ];
@@ -42,7 +42,7 @@ const RIDER_ITEMS: SidebarItem[] = [
   { icon: 'grid_view', path: '/rider', label: 'Fleet Queue' },
   { icon: 'assignment', path: '/rider/assignments', label: 'Assignments' },
   { icon: 'sensors', path: '/rider/status', label: 'Status & Duty' },
-  { icon: 'account_balance_wallet', path: '/rider/wallet', label: 'Earnings & Wallet' },
+  { icon: 'account_balance_wallet', path: '/wallet', label: 'Earnings & Wallet' },
 ];
 
 const CLIENT_ITEMS: SidebarItem[] = [

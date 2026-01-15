@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart, useAuth } from '../Providers';
 import { auth, db } from '../lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { linkWithCredential, EmailAuthProvider, updateProfile, createUserWithEmailAndPassword, sendEmailVerification, RecaptchaVerifier, linkWithPhoneNumber, ConfirmationResult, PhoneAuthProvider } from 'firebase/auth';
+import { linkWithCredential, EmailAuthProvider, updateProfile, createUserWithEmailAndPassword, sendEmailVerification, RecaptchaVerifier, linkWithPhoneNumber, ConfirmationResult, PhoneAuthProvider, signInWithPhoneNumber } from 'firebase/auth';
 import { paymentService } from '../src/lib/services/paymentService';
 
 const DIRECT_PROVIDERS = [
@@ -124,7 +124,7 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
             exchangeRate: isSlshPayment ? exchangeRate : 1
          };
 
-         const orderResult: any = await paymentService.createOrder(payload);
+         const orderResult = await paymentService.createOrder(payload);
          if (!orderResult.success || !orderResult.orderId) {
             throw new Error("Order node rejected.");
          }
@@ -143,7 +143,7 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
          // If it's a mobile provider, we might want to show "AWAITING_USSD" UI *before* callingor *during*?
          // The backend returns PENDING immediately.
 
-         const paymentResult: any = await paymentService.initiatePayment(paymentPayload);
+         const paymentResult = await paymentService.initiatePayment(paymentPayload);
 
          if (paymentResult.success) {
             if (paymentResult.status === 'PENDING') {
@@ -385,7 +385,7 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                                                    if (user) {
                                                       res = await linkWithPhoneNumber(user, fullPhone, appVerifier);
                                                    } else {
-                                                      res = await getConfirmationResultForPhoneSignIn(auth, fullPhone, appVerifier); // Need to import or handle differently? 
+                                                      res = await signInWithPhoneNumber(auth, fullPhone, appVerifier);
                                                       // Actually signInWithPhoneNumber returns ConfirmationResult too.
                                                       // But we didn't import signInWithPhoneNumber to Checkout. 
                                                       // Let's simplify: Only support Phone Link for existing Anon Users for now? 

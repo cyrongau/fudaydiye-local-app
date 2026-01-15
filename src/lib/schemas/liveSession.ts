@@ -4,47 +4,44 @@ export const LiveSessionSchema = z.object({
     id: z.string().optional(),
     vendorId: z.string(),
     vendorName: z.string(),
-    hostAvatar: z.string().optional(),
-    title: z.string().min(1, "Title is required"),
+    title: z.string().min(1, "Title is required").max(100, "Title is too long"),
     category: z.string().min(1, "Category is required"),
     status: z.enum(['SCHEDULED', 'LIVE', 'ENDED']),
-    viewerCount: z.number().int().nonnegative().default(0),
-
-    // Featured Product State
-    featuredProductId: z.string().nullable().optional(),
-    featuredProductName: z.string().nullable().optional(),
-    featuredProductPrice: z.number().nullable().optional(),
-    featuredProductImg: z.string().nullable().optional(),
-
+    featuredProductId: z.string().optional().nullable(),
+    featuredProductName: z.string().optional().nullable(),
+    featuredProductPrice: z.number().optional().nullable(),
+    featuredProductImg: z.string().optional().nullable(),
     streamUrl: z.string().optional(),
+    provider: z.enum(['AGORA', 'LIVEKIT']).optional(),
     scheduledAt: z.any().optional(),
-    startedAt: z.any().optional(),
-    endedAt: z.any().optional(),
     createdAt: z.any().optional(),
+    hostId: z.string().optional(),
+    hostAvatar: z.string().optional(),
+    viewerCount: z.number().optional(),
+    productIds: z.array(z.string()).optional(),
+    likes: z.number().optional()
+});
 
-    likes: z.number().int().default(0),
-    productIds: z.array(z.string()).optional() // List of pinned/selected inventory IDs for this session
+export const ChatMessageSchema = z.object({
+    id: z.string().optional(),
+    text: z.string().min(1, "Message cannot be empty").max(500),
+    userId: z.string(),
+    userName: z.string(),
+    createdAt: z.any().optional()
 });
 
 export const CreateSessionPayloadSchema = z.object({
     vendorId: z.string(),
     vendorName: z.string(),
     hostAvatar: z.string().optional(),
-    title: z.string().min(1, "Title is required"),
-    category: z.string().min(1, "Category is required"),
+    title: z.string().min(5),
+    category: z.string(),
     mode: z.enum(['LIVE', 'SCHEDULE']),
-    featuredProduct: z.any().optional(), // Looser validation here as it comes from UI object
+    featuredProduct: z.any().optional(),
     productIds: z.array(z.string()).optional(),
-    scheduledAt: z.any().optional()
-});
-
-export const ChatMessageSchema = z.object({
-    text: z.string().min(1, "Message cannot be empty"),
-    userId: z.string(),
-    userName: z.string(),
-    createdAt: z.any().optional()
+    scheduledAt: z.any().optional(),
 });
 
 export type LiveSession = z.infer<typeof LiveSessionSchema>;
-export type CreateSessionPayload = z.infer<typeof CreateSessionPayloadSchema>;
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+export type LiveSessionInput = z.infer<typeof LiveSessionSchema>;

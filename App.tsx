@@ -57,6 +57,7 @@ import AdminVendorProfile from './views/AdminVendorProfile';
 import AdminRiderManagement from './views/AdminRiderManagement';
 import AdminRiderProfile from './views/AdminRiderProfile';
 import AdminLogisticsControl from './views/AdminLogisticsControl';
+import AdminDispatchConsole from './views/AdminDispatchConsole';
 import AdminAudits from './views/AdminAudits';
 import AdminLiveSaleModeration from './views/AdminLiveSaleModeration';
 import AdminHubs from './views/AdminHubs';
@@ -87,6 +88,7 @@ import VendorList from './views/VendorList';
 import GlobalScanView from './views/GlobalScanView';
 import VendorLiveCockpit from './views/VendorLiveCockpit';
 import ContactUs from './views/ContactUs';
+import WalletView from './views/WalletView';
 import ScrollToTop from './components/ScrollToTop';
 import { ToastProvider } from './components/Toast';
 import Onboarding from './views/Onboarding';
@@ -280,6 +282,10 @@ const AppRoutes: React.FC = () => {
         <Route path="/rider/navigate/:id" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderNavigationView /></ProtectedRoute>} />
         <Route path="/rider/settings" element={<ProtectedRoute allowedRoles={['RIDER']}><UserSettings /></ProtectedRoute>} />
         <Route path="/rider/scan" element={<ProtectedRoute allowedRoles={['RIDER']}><GlobalScanView role="RIDER" /></ProtectedRoute>} />
+        {/* Reusing RiderWallet path but pointing to new component or keeping separate? User asked for WalletView */}
+        {/* Actually, RiderWallet existed in line 46 imports, let's replace it or add new general wallet route */}
+        <Route path="/wallet" element={<ProtectedRoute allowedRoles={['VENDOR', 'RIDER', 'CLIENT']}><WalletView /></ProtectedRoute>} />
+
 
         {/* Client Routes */}
         <Route path="/client" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientLogistics /></ProtectedRoute>} />
@@ -296,6 +302,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/admin/riders" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminRiderManagement /></ProtectedRoute>} />
         <Route path="/admin/rider/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminRiderProfile /></ProtectedRoute>} />
         <Route path="/admin/logistics" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminLogisticsControl /></ProtectedRoute>} />
+        <Route path="/admin/dispatch" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminDispatchConsole /></ProtectedRoute>} />
         <Route path="/admin/audits" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminAudits /></ProtectedRoute>} />
         <Route path="/admin/live-moderation" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminLiveSaleModeration /></ProtectedRoute>} />
         <Route path="/admin/hubs" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminHubs /></ProtectedRoute>} />
