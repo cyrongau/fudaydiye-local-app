@@ -1,7 +1,8 @@
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
+// Force rebuild 17
 import * as admin from "firebase-admin";
 import { CommunicationFactory } from "./services/CommunicationFactory";
-import { handleNestRequest } from './api/bootstrap';
+// import { handleNestRequest } from './api/bootstrap'; // Moved to dynamic import
 
 // Initialize Firebase Admin (Singleton)
 admin.initializeApp();
@@ -14,7 +15,7 @@ const db = admin.firestore();
 // Trigger to notify vendor on new order
 export const onOrderCreated = functions.firestore
     .document('orders/{orderId}')
-    .onCreate(async (snap, context) => {
+    .onCreate(async (snap, context: functions.EventContext) => {
         const order = snap.data();
         if (!order) return;
 
@@ -54,4 +55,17 @@ export { onVendorSuspended } from './triggers/vendorTriggers';
 // - /orders (Create, Pay)
 // - /products (CUD)
 // - /auth (OTP Request, Verify)
-export const api = functions.https.onRequest(handleNestRequest);
+export const api = functions
+    .runWith({
+        memory: '1GB',
+        timeoutSeconds: 120,
+    })
+    .https.onRequest(async (req, res) => {
+        // Lazy load NestJS to prevent cold start timeouts during deployment/init
+        const { handleNestRequest } = await import('./api/bootstrap');
+        return handleNestRequest(req, res);
+    });
+
+
+
+

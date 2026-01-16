@@ -15,6 +15,8 @@ import LocationTracker from './components/LocationTracker';
 import PullToRefresh from './components/PullToRefresh';
 import { usePlatform } from './hooks/usePlatform';
 import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { api } from './src/services/api';
 
 import Login from './views/Login';
 import Register from './views/Register';
@@ -211,7 +213,7 @@ const AppRoutes: React.FC = () => {
 
   return (
     <>
-      <PermissionCheck />
+      <SystemPermissions />
       <LocationTracker />
       <Routes>
         <Route path="/onboarding" element={<Onboarding />} />
@@ -313,29 +315,77 @@ const AppRoutes: React.FC = () => {
   );
 };
 
-const PermissionCheck: React.FC = () => {
+const SystemPermissions: React.FC = () => {
+  const { user } = useAuth();
+
   useEffect(() => {
-    const requestPermissions = async () => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const initPush = async () => {
+      try {
+        let perm = await PushNotifications.checkPermissions();
+        if (perm.receive === 'prompt') {
+          perm = await PushNotifications.requestPermissions();
+        }
+        if (perm.receive === 'granted') {
+          await PushNotifications.register();
+        }
+      } catch (e) {
+        console.error("Push Init Error:", e);
+      }
+    };
+
+    const setupListeners = async () => {
+      await PushNotifications.removeAllListeners();
+
+      await PushNotifications.addListener('registration', async token => {
+        console.log('Push Registration Token:', token.value);
+        if (user) {
+          try {
+            await api.post('/notifications/token', { token: token.value });
+          } catch (err) {
+            console.error("Failed to sync push token with backend", err);
+          }
+        }
+      });
+
+      await PushNotifications.addListener('registrationError', err => {
+        console.error('Push Registration Error: ', err.error);
+      });
+
+      await PushNotifications.addListener('pushNotificationReceived', notification => {
+        console.log('Push Received: ', notification);
+        // Optionally show local toast if app is in foreground
+      });
+
+      await PushNotifications.addListener('pushNotificationActionPerformed', notification => {
+        console.log('Push Action Performed:', notification.actionId, notification.inputValue);
+        // Handle deep linking here if needed
+      });
+    };
+
+    setupListeners();
+    initPush();
+
+  }, [user]); // Re-run if user changes to ensure token is synced to new user identity
+
+  useEffect(() => {
+    const requestMediaPermissions = async () => {
       // Early permission request for mobile app (especially Android)
-      // This attempts to trigger the OS dialogs immediately after splash
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          // We immediately stop tracks as we just wanted the permission prompt
-          // const stream = ...; stream.getTracks().forEach(t => t.stop()); 
-          // Implementation detail: typically getUserMedia throws if denied, or resolves if granted/prompted successfully
         }
       } catch (err) {
         console.warn("Early permission check failed or denied:", err);
       }
     };
 
-    // Slight delay to ensure app is fully mounted and splash potentially gone
-    const timer = setTimeout(requestPermissions, 1000);
+    const timer = setTimeout(requestMediaPermissions, 1000);
     return () => clearTimeout(timer);
   }, []);
 
-  return null; // Invisible component
+  return null;
 };
 
 export default App;

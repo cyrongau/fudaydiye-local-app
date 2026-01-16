@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, where, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+// import { collection, query, getDocs, where, limit } from 'firebase/firestore'; // Check if used? No.
+import { api } from '../src/services/api';
 import { Product } from '../types';
-import { GoogleGenAI, Type } from "@google/genai";
 
 interface UnifiedSearchProps {
   isOpen: boolean;
@@ -14,9 +13,8 @@ const UnifiedSearch: React.FC<UnifiedSearchProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const [queryText, setQueryText] = useState('');
   const [results, setResults] = useState<Product[]>([]);
-  const [isAiSearching, setIsAiSearching] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -33,71 +31,37 @@ const UnifiedSearch: React.FC<UnifiedSearchProps> = ({ isOpen, onClose }) => {
     localStorage.setItem('fudaydiye_recent_searches', JSON.stringify(updated));
   };
 
-  // Prefetch products for rapid predictive search
+  // Focus and Fetch Recent/Trending on Open
   useEffect(() => {
     if (isOpen) {
-      const fetchAll = async () => {
-        const q = query(collection(db, "products"), where("status", "==", "ACTIVE"), limit(300));
-        const snap = await getDocs(q);
-        setAllProducts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
-        setTimeout(() => inputRef.current?.focus(), 100);
-      };
-      fetchAll();
+      setTimeout(() => inputRef.current?.focus(), 100);
+      // Optional: Fetch trending from backend if implemented
     }
   }, [isOpen]);
 
-  // Logic: Predictive & AI Search
+  // Debounced Backend Search
   useEffect(() => {
-    if (queryText.length < 3) {
+    if (queryText.length < 2) {
       setResults([]);
       return;
     }
 
-    // 1. Standard Predictive Search
-    const predictive = allProducts.filter(p =>
-      p.name.toLowerCase().includes(queryText.toLowerCase()) ||
-      p.category.toLowerCase().includes(queryText.toLowerCase())
-    );
-    setResults(predictive);
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await api.get('/search/products', { params: { q: queryText } });
+        setResults(res.data.results || []);
+      } catch (err) {
+        console.error("Search API Error", err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300); // 300ms debounce
 
-    // 2. Intelligent Search (Gemini) - Debounced
-    const aiTimer = setTimeout(() => {
-      if (queryText.length > 5) runAiSearch(queryText);
-    }, 1000);
+    return () => clearTimeout(timer);
+  }, [queryText]);
 
-    return () => clearTimeout(aiTimer);
-  }, [queryText, allProducts]);
-
-  const runAiSearch = async (text: string) => {
-    setIsAiSearching(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const inventoryBrief = allProducts.map(p => `${p.id}: ${p.name} (${p.shortDescription})`).join('; ');
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Inventory: ${inventoryBrief}. User Query: "${text}". Which Product IDs match best? Return JSON array of strings only.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
-        }
-      });
-
-      const matchedIds = JSON.parse(response.text || '[]');
-      const aiMatches = allProducts.filter(p => matchedIds.includes(p.id));
-
-      // Merge results, avoiding duplicates
-      setResults(prev => {
-        const existingIds = new Set(prev.map(p => p.id));
-        const uniqueAiMatches = aiMatches.filter(p => !existingIds.has(p.id));
-        return [...prev, ...uniqueAiMatches];
-      });
-    } catch (err) {
-      console.error("AI Search Failure:", err);
-    } finally {
-      setIsAiSearching(false);
-    }
-  };
+  // ... (rest of component, removing AI search logic for now)
 
   const handleVoiceSearch = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -135,8 +99,8 @@ const UnifiedSearch: React.FC<UnifiedSearchProps> = ({ isOpen, onClose }) => {
 
       <div className="relative w-full max-w-2xl bg-white dark:bg-surface-dark rounded-[40px] shadow-2xl border border-white/10 overflow-hidden animate-in slide-in-from-top-10 duration-500">
         <div className="flex items-center px-4 md:px-8 h-20 gap-2 md:gap-4 border-b border-gray-100 dark:border-white/5">
-          <span className={`material-symbols-outlined text-2xl md:text-3xl ${isAiSearching ? 'text-primary animate-spin' : 'text-gray-400'}`}>
-            {isAiSearching ? 'sync' : 'search'}
+          <span className={`material-symbols-outlined text-2xl md:text-3xl ${isSearching ? 'text-primary animate-spin' : 'text-gray-400'}`}>
+            {isSearching ? 'sync' : 'search'}
           </span>
           <input
             ref={inputRef}
@@ -187,7 +151,7 @@ const UnifiedSearch: React.FC<UnifiedSearchProps> = ({ isOpen, onClose }) => {
                 </div>
               </div>
             </div>
-          ) : results.length === 0 && !isAiSearching ? (
+          ) : results.length === 0 ? (
             <div className="p-20 text-center opacity-30">
               <span className="material-symbols-outlined text-5xl block mb-4">search_off</span>
               <p className="text-xs font-black uppercase tracking-widest">No matching results in mesh</p>
@@ -213,12 +177,7 @@ const UnifiedSearch: React.FC<UnifiedSearchProps> = ({ isOpen, onClose }) => {
                   <span className="material-symbols-outlined text-gray-300 group-hover:translate-x-1 transition-transform">arrow_forward_ios</span>
                 </button>
               ))}
-              {isAiSearching && (
-                <div className="p-4 flex items-center justify-center gap-3 text-primary animate-pulse">
-                  <span className="material-symbols-outlined">auto_awesome</span>
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em]">AI Semantic Audit...</span>
-                </div>
-              )}
+              {/* AI Logic Removed for Backend Search V1 */}
             </div>
           )}
         </div>

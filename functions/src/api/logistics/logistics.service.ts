@@ -1,6 +1,7 @@
 
 import { Injectable, Logger, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { UpdateLocationDto, AssignJobDto } from './dto/logistics.dto';
 import * as geofire from 'geofire-common';
 
@@ -20,17 +21,69 @@ export class LogisticsService {
             // Compute Geohash
             const hash = geofire.geohashForLocation([latitude, longitude]);
 
-            await this.db.collection('riders').doc(riderId).set({
+            const updateData = {
                 currLocation: new admin.firestore.GeoPoint(latitude, longitude),
                 geohash: hash, // For Geo-Queries
                 status: status,
-                lastHeartbeat: admin.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+                lastHeartbeat: FieldValue.serverTimestamp()
+            };
+
+            await this.db.runTransaction(async (t) => {
+                const riderRef = this.db.collection('riders').doc(riderId);
+                const userRef = this.db.collection('users').doc(riderId);
+
+                // Read Rider State to check for Active Job
+                const riderSnap = await t.get(riderRef);
+                const riderData = riderSnap.data();
+
+                // Update Riders (Telemetry)
+                t.set(riderRef, updateData, { merge: true });
+
+                // Sync with Users (Profile/Frontend)
+                t.set(userRef, {
+                    currentGeo: { lat: latitude, lng: longitude },
+                    status: status,
+                    lastActive: FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                // Sync with Active Order (Real-time Navigation)
+                if (riderData?.currentOrderId) {
+                    const orderRef = this.db.collection('orders').doc(riderData.currentOrderId);
+                    t.update(orderRef, {
+                        currentLocation: { lat: latitude, lng: longitude }
+                    });
+                }
+            });
 
             return { success: true };
         } catch (error) {
             this.logger.error(`Location update failed for ${riderId}:`, error);
             throw new InternalServerErrorException("Failed to update location.");
+        }
+    }
+
+
+
+    async updateRiderStatus(riderId: string, status: string) {
+        try {
+            await this.db.runTransaction(async (t) => {
+                const riderRef = this.db.collection('riders').doc(riderId);
+                const userRef = this.db.collection('users').doc(riderId);
+
+                t.set(riderRef, {
+                    status: status,
+                    updatedAt: FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                t.set(userRef, {
+                    status: status,
+                    lastActive: FieldValue.serverTimestamp()
+                }, { merge: true });
+            });
+            return { success: true };
+        } catch (error) {
+            this.logger.error(`Status update failed for ${riderId}`, error);
+            throw new InternalServerErrorException("Failed to update status");
         }
     }
 
@@ -52,7 +105,7 @@ export class LogisticsService {
                 t.update(orderRef, {
                     riderId: riderId,
                     status: 'DISPATCHED',
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    updatedAt: FieldValue.serverTimestamp()
                 });
 
                 t.update(riderRef, {
@@ -112,18 +165,7 @@ export class LogisticsService {
         return matchingDocs.sort((a, b) => a.distance - b.distance);
     }
 
-    async updateRiderStatus(riderId: string, status: string) {
-        try {
-            await this.db.collection('riders').doc(riderId).update({
-                status: status,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            return { success: true };
-        } catch (error) {
-            this.logger.error(`Status update failed for ${riderId}`, error);
-            throw new InternalServerErrorException("Failed to update status");
-        }
-    }
+
 
     async updateJobStatus(orderId: string, status: string, riderId: string) {
         try {
@@ -139,37 +181,82 @@ export class LogisticsService {
                     throw new BadRequestException("Rider does not own this job");
                 }
 
+                if (status === 'CANCELLED') {
+                    // Logic: Rider rejects/cancels -> Return job to PENDING pool
+                    t.update(orderRef, {
+                        riderId: FieldValue.delete(),
+                        riderName: FieldValue.delete(),
+                        status: 'PENDING',
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
+
+                    const riderSnap = await t.get(riderRef);
+                    if (riderSnap.exists) {
+                        t.update(riderRef, {
+                            status: 'ONLINE',
+                            currentOrderId: FieldValue.delete(),
+                            lastAction: 'JOB_CANCELLED',
+                            updatedAt: FieldValue.serverTimestamp()
+                        });
+                    } else {
+                        // Edge case: Rider doc missing, just recreate bare minimum status
+                        t.set(riderRef, {
+                            status: 'ONLINE',
+                            lastAction: 'JOB_CANCELLED',
+                            updatedAt: FieldValue.serverTimestamp()
+                        });
+                    }
+
+                    // Notify Vendor? Optional but good practice
+                    return;
+                }
+
+                // Map 'PICKED_UP' to 'SHIPPED' for consistency with Order Statuses
+                const mappedStatus = status === 'PICKED_UP' ? 'SHIPPED' : status;
+
                 let updates: any = {
-                    status: status,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    status: mappedStatus,
+                    updatedAt: FieldValue.serverTimestamp()
                 };
 
-                // If DELIVERED or CANCELLED, free up the rider?
-                // Or keep them BUSY until they manually go ONLINE?
-                // Usually, DELIVERED -> ONLINE (Auto) or BUSY (remain busy).
-                // Let's assume Auto-Online on Delivery for MVP simplicity, or just keep BUSY.
+                // Notification Logic
+                const notificationRef = this.db.collection('notifications').doc();
+                let notifyCustomer = false;
+                let notificationTitle = "";
+                let notificationMessage = "";
 
-                t.update(orderRef, updates);
+                if (mappedStatus === 'SHIPPED') {
+                    notifyCustomer = true;
+                    notificationTitle = "On The Way! 🛵";
+                    notificationMessage = `Your order #${orderData.orderNumber || orderId} has been picked up by ${orderData.riderName || 'the rider'} and is on its way to you!`;
+                } else if (mappedStatus === 'DELIVERED') {
+                    notifyCustomer = true;
+                    notificationTitle = "Delivered! 📦";
+                    notificationMessage = `Order #${orderData.orderNumber || orderId} has been successfully delivered. Enjoy!`;
+                }
 
-                if (status === 'DELIVERED') {
+                if (notifyCustomer && orderData.customerId) {
+                    t.set(notificationRef, {
+                        userId: orderData.customerId,
+                        title: notificationTitle,
+                        message: notificationMessage,
+                        type: 'ORDER',
+                        isRead: false,
+                        link: `/customer/orders`, // Direct to Order Hub
+                        createdAt: FieldValue.serverTimestamp()
+                    });
+                }
+
+                if (mappedStatus === 'DELIVERED') {
                     // Check logic from RiderDeliveryConfirmation
                     const orderTotal = orderData.total || 0;
-                    const deliveryFee = orderData.deliveryFee || 3.50;
+                    const deliveryFee = orderData.deliveryFee || 5.00; // Use updated default
 
                     const platformFee = orderTotal * 0.10;
-                    const merchantShare = orderTotal * 0.90; // Assuming total includes goods only, if total includes delivery fee this math changes. Stick to client logic.
+                    const merchantShare = orderTotal * 0.90;
 
                     // Identify Actors
                     const vendorId = orderData.vendorId;
-
-                    // Implementation Plan says: Wallet Entity (Firestore: wallets/{userId})
-                    // But RiderDeliveryConfirmation uses `users` collection for walletBalance.
-                    // FinanceService uses `wallets`.
-                    // MIGRATION CONFLICT: FinanceService uses `wallets` collection. Legacy Frontend uses `users` doc fields.
-                    // To follow NEW ARCHITECTURE, we must use `wallets`.
-                    // BUT if the Frontend expects `users` to have balance, we might break UI.
-                    // WalletView uses `FinanceService.getBalance` which reads `wallets`.
-                    // So we should write to `wallets`.
 
                     const vendorWalletRef = this.db.collection('wallets').doc(vendorId);
                     const riderWalletRef = this.db.collection('wallets').doc(riderId);
@@ -179,35 +266,35 @@ export class LogisticsService {
                     // Update Order
                     t.update(orderRef, {
                         status: 'DELIVERED',
-                        completedAt: admin.firestore.FieldValue.serverTimestamp(),
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                        completedAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp()
                     });
 
                     // Free Rider
                     t.update(riderRef, {
-                        currentOrderId: admin.firestore.FieldValue.delete(),
+                        currentOrderId: FieldValue.delete(),
                         status: 'ONLINE',
                         lastAction: 'JOB_COMPLETED'
                     });
 
                     // 1. Credit Rider (Earning)
                     t.set(riderWalletRef, {
-                        balance: admin.firestore.FieldValue.increment(deliveryFee),
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                        role: 'RIDER' // Ensure doc exists
+                        balance: FieldValue.increment(deliveryFee),
+                        updatedAt: FieldValue.serverTimestamp(),
+                        role: 'RIDER'
                     }, { merge: true });
 
                     // 2. Credit Vendor (Sale Share)
                     t.set(vendorWalletRef, {
-                        balance: admin.firestore.FieldValue.increment(merchantShare),
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        balance: FieldValue.increment(merchantShare),
+                        updatedAt: FieldValue.serverTimestamp(),
                         role: 'VENDOR'
                     }, { merge: true });
 
                     // 3. Credit Admin (Platform Fee)
                     t.set(adminWalletRef, {
-                        balance: admin.firestore.FieldValue.increment(platformFee),
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        balance: FieldValue.increment(platformFee),
+                        updatedAt: FieldValue.serverTimestamp(),
                         role: 'ADMIN'
                     }, { merge: true });
 
@@ -219,11 +306,8 @@ export class LogisticsService {
                         status: 'COMPLETED',
                         referenceId: orderId,
                         description: `Dispatch Earning for Order #${orderData.orderNumber || orderId}`,
-                        createdAt: admin.firestore.FieldValue.serverTimestamp()
+                        createdAt: FieldValue.serverTimestamp()
                     });
-
-                    // Optional: Create Transaction Records for Vendor and Admin? 
-                    // For MVP, focus on Rider Earning visibility.
                 } else {
                     t.update(orderRef, updates);
                 }
@@ -232,6 +316,49 @@ export class LogisticsService {
         } catch (error: any) {
             this.logger.error(`Job update failed for ${orderId}`, error);
             throw error.status ? error : new InternalServerErrorException("Failed to update job");
+        }
+    }
+    async createLogisticsOrder(dto: any, userId: string, userName: string) {
+        // Calculate Price Logic (Mock or Distance)
+        // Base Price: $3.00
+        // Size Multiplier
+        let price = 3.00;
+        if (dto.size === 'Medium') price += 2.00;
+        if (dto.size === 'Large') price += 5.00;
+        if (dto.size === 'Extra Heavy') price += 10.00;
+
+        // Mock Distance Pricing (Random for now without specific coordinates from client string)
+        price += 2.00;
+
+        try {
+            // Create Order Directly (No Transaction needed for single doc creation unless wallet check)
+            // But we likely want to verify user/wallet? 
+            // Start simple: Create PENDING order
+            const orderRef = this.db.collection('orders').doc();
+            const orderId = orderRef.id;
+
+            const orderData = {
+                type: 'LOGISTICS',
+                status: 'PENDING',
+                customerId: userId,
+                customerName: userName,
+                pickupLocation: { address: dto.pickup },
+                dropoffLocation: { address: dto.dropoff },
+                packageSize: dto.size,
+                packageConditions: dto.conditions || [],
+                notes: dto.notes || '',
+                price: price, // Server Calculated
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                orderNumber: `LOG-${Math.floor(1000 + Math.random() * 9000)}`
+            };
+
+            await orderRef.set(orderData);
+
+            return { success: true, orderId: orderId, price: price };
+        } catch (error) {
+            this.logger.error("Failed to create logistics order", error);
+            throw new InternalServerErrorException("Order creation failed");
         }
     }
 }

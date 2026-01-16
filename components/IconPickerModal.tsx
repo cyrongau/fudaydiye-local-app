@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface IconPickerModalProps {
     isOpen: boolean;
@@ -40,12 +41,18 @@ const MATERIAL_ICONS = [
 
 const IconPickerModal: React.FC<IconPickerModalProps> = ({ isOpen, onClose, onSelect }) => {
     const [search, setSearch] = useState('');
+    const [mounted, setMounted] = useState(false);
 
-    if (!isOpen) return null;
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
+
+    if (!isOpen || !mounted) return null;
 
     const filteredIcons = MATERIAL_ICONS.filter(icon => icon.includes(search.toLowerCase()));
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
@@ -87,7 +94,8 @@ const IconPickerModal: React.FC<IconPickerModalProps> = ({ isOpen, onClose, onSe
                     ))}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

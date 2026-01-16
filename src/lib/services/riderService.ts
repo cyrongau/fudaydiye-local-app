@@ -1,5 +1,5 @@
 
-import { api } from '../api';
+import { api } from '../../services/api';
 import { db } from '../../../lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 
@@ -56,6 +56,10 @@ export class RiderService {
 
     static async completeJob(jobId: string, riderId: string): Promise<void> {
         await api.post('/logistics/jobs/status', { orderId: jobId, status: 'DELIVERED', riderId });
+    }
+
+    static async cancelJob(jobId: string, riderId: string): Promise<void> {
+        await api.post('/logistics/jobs/status', { orderId: jobId, status: 'CANCELLED', riderId });
     }
 
     static async updateStatus(riderId: string, status: 'ONLINE' | 'OFFLINE' | 'BUSY'): Promise<void> {

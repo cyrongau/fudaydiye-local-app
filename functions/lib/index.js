@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.api = exports.onVendorSuspended = exports.onOrderCreated = void 0;
-const functions = require("firebase-functions");
+const functions = require("firebase-functions/v1");
+// Force rebuild 17
 const admin = require("firebase-admin");
 const CommunicationFactory_1 = require("./services/CommunicationFactory");
-const bootstrap_1 = require("./api/bootstrap");
+// import { handleNestRequest } from './api/bootstrap'; // Moved to dynamic import
 // Initialize Firebase Admin (Singleton)
 admin.initializeApp();
 const db = admin.firestore();
@@ -53,5 +54,14 @@ Object.defineProperty(exports, "onVendorSuspended", { enumerable: true, get: fun
 // - /orders (Create, Pay)
 // - /products (CUD)
 // - /auth (OTP Request, Verify)
-exports.api = functions.https.onRequest(bootstrap_1.handleNestRequest);
+exports.api = functions
+    .runWith({
+    memory: '1GB',
+    timeoutSeconds: 120,
+})
+    .https.onRequest(async (req, res) => {
+    // Lazy load NestJS to prevent cold start timeouts during deployment/init
+    const { handleNestRequest } = await Promise.resolve().then(() => require('./api/bootstrap'));
+    return handleNestRequest(req, res);
+});
 //# sourceMappingURL=index.js.map

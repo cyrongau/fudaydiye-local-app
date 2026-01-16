@@ -13,18 +13,25 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrdersService = void 0;
 const common_1 = require("@nestjs/common");
 const admin = require("firebase-admin");
+const firestore_1 = require("firebase-admin/firestore");
 const inventory_service_1 = require("../inventory/inventory.service");
 const adjust_stock_dto_1 = require("../inventory/dto/adjust-stock.dto");
+const events_service_1 = require("../events/events.service");
 let OrdersService = OrdersService_1 = class OrdersService {
-    constructor(inventoryService) {
+    constructor(inventoryService, eventsService) {
         this.inventoryService = inventoryService;
+        this.eventsService = eventsService;
         this.logger = new common_1.Logger(OrdersService_1.name);
         this.db = admin.firestore();
         // Manually instantiate service if DI issues, or assume NestJS handles it
         // Ideally should be proper DI in Module.
     }
     async create(createOrderDto, userId) {
-        const { cartItems, recipientName, recipientPhone, recipientAddress, paymentMethod, deliveryFee, isAtomic, recipientId, savePayment, syncCartId, paymentDetails } = createOrderDto;
+        const { cartItems, recipientName, recipientPhone, recipientAddress, paymentMethod, 
+        // deliveryFee, // IGNORE CLIENT FEE
+        isAtomic, recipientId, savePayment, syncCartId, paymentDetails } = createOrderDto;
+        // Secure Calculation of Delivery Fee
+        const deliveryFee = isAtomic ? 8.50 : 5.00;
         if (!cartItems || cartItems.length === 0) {
             throw new common_1.BadRequestException("Cart is empty.");
         }
@@ -36,7 +43,10 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 var _a;
                 let calculatedTotal = 0;
                 const orderItems = [];
-                // 1. Inventory & Price Verification Loop
+                const inventoryUpdates = [];
+                // ==========================================
+                // PHASE 1: READS & VALIDATION
+                // ==========================================
                 for (const item of cartItems) {
                     const productRef = this.db.collection("products").doc(item.productId);
                     const productSnap = await transaction.get(productRef);
@@ -49,40 +59,13 @@ let OrdersService = OrdersService_1 = class OrdersService {
                         throw new common_1.BadRequestException(`Item ${productData.name} does not belong to vendor ${vendorId}.`);
                     }
                     let price = productData.salePrice > 0 ? productData.salePrice : productData.basePrice;
-                    // Handle Variations (Logic Simplified for now, assuming stock tracked at base or variations)
-                    // If complex variation stock tracking is needed, InventoryService needs to handle it.
-                    // For now, let's assume InventoryService handles BASE stock.
-                    // TODO: Update InventoryService to handle variation stock if needed.
-                    // For MVP Phase 2.2, we stick to Product Level Stock or ensure InventoryService supports it?
-                    // The previous code handled variation stock manually. 
-                    // To avoid regression, we should either:
-                    // A) Update InventoryService to handle variationId
-                    // B) Keep manual variation logic here (BAD for audit)
-                    // C) Assume Base Stock for now.
-                    // Let's go with Base Stock mainly, OR logic:
+                    // Handle Variations (Logic Simplified)
                     if (item.variationId && productData.variations) {
                         const variant = productData.variations.find((v) => v.id === item.variationId);
                         if (!variant)
                             throw new common_1.NotFoundException(`Variant ${item.variationId} not found.`);
                         price = variant.salePrice > 0 ? variant.salePrice : variant.price;
-                        // For variation stock, we ideally need InventoryService to support it.
-                        // Let's create a TODO and just decrement base stock for now to keep it clean, 
-                        // OR fallback to manual variation update + generic sale record?
-                        // Let's just deduct base stock for simplicity of migration, acknowledging variation stock debt.
-                        // Wait, previous code DID handle variation stock. 
-                        // "transaction.update(productRef, { variations: newVariations });"
-                        // We will call InventoryService for the AUDIT TRAIL, but if it only updates baseStock, we verify baseStock.
-                        // Let's rely on InventoryService.adjustStock updating the doc.
                     }
-                    // Use Inventory Service for Stock Deduction & Audit
-                    // We need to pass the transaction!
-                    await this.inventoryService.adjustStock({
-                        productId: item.productId,
-                        change: -item.qty,
-                        reason: adjust_stock_dto_1.InventoryReason.SALE,
-                        notes: `Order #${orderRefNum}`,
-                        orderId: 'PENDING_ORDER_ID' // We don't have ID yet. Can send "PENDING" or skip?
-                    }, userId, transaction);
                     calculatedTotal += price * item.qty;
                     orderItems.push({
                         productId: item.productId,
@@ -94,6 +77,25 @@ let OrdersService = OrdersService_1 = class OrdersService {
                         vendorId: vendorId,
                         vendor: productData.vendor || 'Unknown Vendor'
                     });
+                    // Prepare Inventory Update (Defer Write)
+                    inventoryUpdates.push({
+                        productId: item.productId,
+                        qty: item.qty,
+                        currentStock: productData.baseStock || 0
+                    });
+                }
+                // ==========================================
+                // PHASE 2: WRITES (INVENTORY & ORDER)
+                // ==========================================
+                // 1. Execute Inventory Updates (Using Preloaded Stock to skip Reads)
+                for (const update of inventoryUpdates) {
+                    await this.inventoryService.adjustStock({
+                        productId: update.productId,
+                        change: -update.qty,
+                        reason: adjust_stock_dto_1.InventoryReason.SALE,
+                        notes: `Order #${orderRefNum}`,
+                        orderId: 'PENDING'
+                    }, { uid: userId, role: 'SYSTEM' }, transaction, update.currentStock);
                 }
                 const finalTotal = calculatedTotal + deliveryFee;
                 // 2. Payment Simulation
@@ -101,7 +103,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
                     throw new common_1.InternalServerErrorException("Payment gateway connection timeout.");
                 }
                 // 3. Create Order
-                const orderDocRef = this.db.collection("orders").doc();
+                const orderDocRef = this.db.collection("orders").doc(); // Generates ID locally, no read needed
                 const orderData = {
                     orderNumber: orderRefNum,
                     customerId: recipientId || `guest_${Date.now()}`,
@@ -118,15 +120,20 @@ let OrdersService = OrdersService_1 = class OrdersService {
                     paymentMethod: paymentMethod,
                     paymentMask: paymentMethod === 'CARD' ? `**** **** ${paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.last4}` : recipientPhone,
                     currency: 'USD',
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    createdAt: firestore_1.FieldValue.serverTimestamp(),
                     shippingAddress: recipientAddress,
                 };
                 transaction.set(orderDocRef, orderData);
                 // 4. Save Payment Source 
                 if (recipientId && savePayment && !recipientId.startsWith("guest_") && paymentMethod === 'CARD') {
+                    // This creates a read/write hazard if unique user doc? 
+                    // No, update is write only if we don't read. 
+                    // BUT transaction.update requires doc to exist. 
+                    // We haven't read 'userRef'. 
+                    // If we update blindly, it's a WRITE. OK.
                     const userRef = this.db.collection("users").doc(recipientId);
                     transaction.update(userRef, {
-                        savedPaymentSources: admin.firestore.FieldValue.arrayUnion({
+                        savedPaymentSources: firestore_1.FieldValue.arrayUnion({
                             id: `src_${Math.random().toString(36).substring(7)}`,
                             type: 'CARD',
                             provider: 'MockGateway',
@@ -137,12 +144,22 @@ let OrdersService = OrdersService_1 = class OrdersService {
                 }
                 // 5. Check out Cart
                 if (syncCartId) {
+                    // WRITE ONLY
                     transaction.update(this.db.collection("carts").doc(syncCartId), {
                         status: 'CHECKED_OUT',
                         totalValue: finalTotal
                     });
                 }
-                return { success: true, orderId: orderDocRef.id, orderNumber: orderRefNum };
+                return { success: true, orderId: orderDocRef.id, orderNumber: orderRefNum, total: finalTotal };
+            });
+            // Log Event (Async - Fire & Forget)
+            this.eventsService.logEvent(userId, 'ORDER_PLACED', {
+                metadata: {
+                    orderId: result.orderId,
+                    orderNumber: result.orderNumber,
+                    total: result.total
+                },
+                relatedEntityId: result.orderId
             });
             return result;
         }
@@ -153,23 +170,33 @@ let OrdersService = OrdersService_1 = class OrdersService {
             throw new common_1.InternalServerErrorException(error.message || "Transaction failed");
         }
     }
-    async findAll(limit = 10, status, riderId) {
+    async findAll(user, limit = 20, status) {
         let query = this.db.collection('orders');
+        // Role-based Access Control (RBAC) Filtering
+        if (user.role === 'VENDOR') {
+            query = query.where('vendorId', '==', user.uid);
+        }
+        else if (user.role === 'RIDER') {
+            query = query.where('riderId', '==', user.uid);
+        }
+        else if (user.role === 'ADMIN' || user.role === 'FUDAYDIYE_ADMIN') {
+            // Admin sees all, allow optional filtering if params provided (not impl yet for params like vendorId)
+        }
+        else {
+            // Default to Customer View
+            query = query.where('customerId', '==', user.uid);
+        }
         if (status) {
             query = query.where('status', '==', status);
         }
-        if (riderId === 'null') {
-            // Firestore doesn't support where('riderId', '==', null) directly in all SDK versions effectively for missing fields sometimes, 
-            // but assuming we store null explicitly.
-            // Ideally use a specialized index or a separate 'isAssigned' flag. 
-            // For prototype: We might client-side filter if this is flaky, but let's try basic equality.
-            query = query.where('riderId', '==', null);
-        }
-        else if (riderId) {
-            query = query.where('riderId', '==', riderId);
-        }
-        const snapshot = await query.limit(Number(limit) || 10).get();
-        return snapshot.docs.map(doc => (Object.assign({ id: doc.id }, doc.data())));
+        const snapshot = await query.orderBy('createdAt', 'desc').limit(Number(limit) || 20).get();
+        return snapshot.docs.map(doc => {
+            var _a;
+            return (Object.assign(Object.assign({ id: doc.id }, doc.data()), { 
+                // Ensure dates are serialized if needed, though Maps usually handle it. 
+                // Firestore Timestamps need conversion for clean JSON often.
+                createdAt: ((_a = doc.data().createdAt) === null || _a === void 0 ? void 0 : _a.toDate()) || null }));
+        });
     }
     async findOne(id) {
         const doc = await this.db.collection('orders').doc(id).get();
@@ -212,7 +239,7 @@ let OrdersService = OrdersService_1 = class OrdersService {
                     paymentStatus: result.status,
                     paymentGatewayRef: result.transactionId || null,
                     paymentMethod: paymentMethod,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    updatedAt: firestore_1.FieldValue.serverTimestamp()
                 });
                 if (result.status === 'COMPLETED') {
                     await orderRef.update({
@@ -228,10 +255,160 @@ let OrdersService = OrdersService_1 = class OrdersService {
             throw new common_1.InternalServerErrorException(error.message || "Payment Gateway Error");
         }
     }
+    async cancelOrder(orderId, userId, reason = "Vendor cancelled", role) {
+        try {
+            await this.db.runTransaction(async (t) => {
+                const orderRef = this.db.collection('orders').doc(orderId);
+                const orderSnap = await t.get(orderRef);
+                if (!orderSnap.exists)
+                    throw new common_1.NotFoundException("Order not found");
+                const order = orderSnap.data();
+                // Auth Check
+                this.logger.log(`Cancel Request: User=${userId}, Role=${role}, OrderVendor=${order.vendorId}, OrderCustomer=${order.customerId}`);
+                if (role === 'VENDOR') {
+                    if (order.vendorId !== userId) {
+                        this.logger.warn(`Vendor mismatch: ${order.vendorId} !== ${userId}`);
+                        throw new common_1.BadRequestException("Not authorized: Vendor ID mismatch");
+                    }
+                }
+                else if (role === 'ADMIN' || role === 'FUDAYDIYE_ADMIN') {
+                    // Admin ok
+                }
+                else if (order.customerId !== userId) { // Assume Customer if not specified role match
+                    this.logger.warn(`Customer mismatch: ${order.customerId} !== ${userId} (Role: ${role})`);
+                    throw new common_1.BadRequestException("Not authorized: Customer ID mismatch");
+                }
+                // Status Check
+                if (['SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED_BY_VENDOR'].includes(order.status)) {
+                    throw new common_1.BadRequestException("Cannot cancel order in current status.");
+                }
+                // 1. Refund Logic
+                if (order.isPaid || (order.paymentStatus === 'COMPLETED')) {
+                    const customerWalletRef = this.db.collection('wallets').doc(order.customerId);
+                    const txRef = this.db.collection('transactions').doc();
+                    // Blind write increment
+                    t.set(customerWalletRef, {
+                        balance: firestore_1.FieldValue.increment(order.total),
+                        updatedAt: firestore_1.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    t.set(txRef, {
+                        userId: order.customerId,
+                        type: 'REFUND',
+                        amount: order.total,
+                        status: 'COMPLETED',
+                        referenceId: orderId,
+                        description: `Refund for Order #${order.orderNumber || orderId}. Reason: ${reason}`,
+                        createdAt: firestore_1.FieldValue.serverTimestamp()
+                    });
+                }
+                // 2. Inventory Reversal (Restock)
+                if (order.items && Array.isArray(order.items)) {
+                    for (const item of order.items) {
+                        const productRef = this.db.collection('products').doc(item.productId);
+                        t.update(productRef, {
+                            baseStock: firestore_1.FieldValue.increment(item.qty)
+                        });
+                    }
+                }
+                // 3. Update Status
+                t.update(orderRef, {
+                    status: 'CANCELLED_BY_VENDOR',
+                    cancelledAt: firestore_1.FieldValue.serverTimestamp(),
+                    cancellationReason: reason,
+                    riderId: firestore_1.FieldValue.delete(),
+                    riderName: firestore_1.FieldValue.delete()
+                });
+                // 4. Notify Customer
+                const notifRef = this.db.collection('notifications').doc();
+                t.set(notifRef, {
+                    userId: order.customerId,
+                    title: "Order Cancelled 🛑",
+                    message: `Your order #${order.orderNumber || '...'} was cancelled. ${reason}. Refund processed.`,
+                    type: 'FINANCE',
+                    isRead: false,
+                    link: `/customer/orders/${orderId}`,
+                    createdAt: firestore_1.FieldValue.serverTimestamp()
+                });
+            });
+            return { success: true };
+        }
+        catch (error) {
+            this.logger.error(`Cancel failed:`, error);
+            throw error;
+        }
+    }
+    async updateStatus(orderId, status, vendorId) {
+        const orderRef = this.db.collection("orders").doc(orderId);
+        await this.db.runTransaction(async (t) => {
+            const snap = await t.get(orderRef);
+            if (!snap.exists)
+                throw new common_1.NotFoundException("Order not found");
+            const data = snap.data();
+            if (data.vendorId !== vendorId) {
+                throw new common_1.BadRequestException("Unauthorized access to this order.");
+            }
+            t.update(orderRef, {
+                status: status,
+                lastStatusUpdate: firestore_1.FieldValue.serverTimestamp()
+            });
+            // Notify Customer
+            const notifRef = this.db.collection("notifications").doc();
+            t.set(notifRef, {
+                userId: data.customerId,
+                title: "Order Update 📦",
+                message: `Order #${data.orderNumber} is now ${status}.`,
+                link: `/customer/track/${orderId}`,
+                type: 'ORDER',
+                isRead: false,
+                createdAt: firestore_1.FieldValue.serverTimestamp()
+            });
+        });
+        // Log Event for Notifications
+        this.eventsService.logEvent(vendorId, 'ORDER_STATUS_CHANGED', {
+            metadata: { orderId, status },
+            relatedEntityId: orderId
+        });
+        return { success: true };
+    }
+    async assignRider(orderId, riderId, riderName, vendorId) {
+        const orderRef = this.db.collection("orders").doc(orderId);
+        await this.db.runTransaction(async (t) => {
+            const snap = await t.get(orderRef);
+            if (!snap.exists)
+                throw new common_1.NotFoundException("Order not found");
+            const data = snap.data();
+            if (data.vendorId !== vendorId) {
+                throw new common_1.BadRequestException("Unauthorized access to this order.");
+            }
+            if (data.status === 'SHIPPED' || data.status === 'DELIVERED') {
+                // Determine if re-assignment is allowed. Assuming yes if issue arises, but typically not.
+                // Let's allow for now if vendor initiates.
+            }
+            t.update(orderRef, {
+                riderId: riderId,
+                riderName: riderName,
+                status: 'ACCEPTED',
+                lastUpdate: firestore_1.FieldValue.serverTimestamp()
+            });
+            // Notify Rider
+            const notifRef = this.db.collection("notifications").doc();
+            t.set(notifRef, {
+                userId: riderId,
+                title: "New Job Assigned 🛵",
+                message: `New delivery request from ${data.vendorName || 'Merchant'}.`,
+                link: `/rider/pickup/${orderId}`,
+                type: 'ORDER',
+                isRead: false,
+                createdAt: firestore_1.FieldValue.serverTimestamp()
+            });
+        });
+        return { success: true };
+    }
 };
 OrdersService = OrdersService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [inventory_service_1.InventoryService])
+    __metadata("design:paramtypes", [inventory_service_1.InventoryService,
+        events_service_1.EventsService])
 ], OrdersService);
 exports.OrdersService = OrdersService;
 //# sourceMappingURL=orders.service.js.map

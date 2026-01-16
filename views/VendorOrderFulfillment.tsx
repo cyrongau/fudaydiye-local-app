@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import DocumentModal from '../components/DocumentModal';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { useAuth } from '../Providers';
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { api } from '../src/services/api';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order, RiderProfile } from '../types';
 
@@ -19,70 +21,52 @@ const VendorOrderFulfillment: React.FC = () => {
   const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
   const [availableRiders, setAvailableRiders] = useState<RiderProfile[]>([]);
   const [isFindingRiders, setIsFindingRiders] = useState(false);
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
 
-    const q = query(
-      collection(db, "orders"),
-      where("vendorId", "==", user.uid)
-    );
+    const fetchOrders = async () => {
+      try {
+        const res = await api.get('/orders', {
+          params: { limit: 50 } // Fetch more for vendor dashboard
+        });
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          total: Number(data.total) || Number(data.totalAmount) || 0,
-          createdAt: data.createdAt || { seconds: 0 } // Safe fallback
-        } as Order;
-      });
-      fetched.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setOrders(fetched);
-      setLoading(false);
-    }, (err) => {
-      console.error("Orders Verification Failed:", err);
-      setLoading(false);
-    });
+        // Backend returns dates as strings mostly, or timestamps if raw. 
+        // Our Service modification converts them to Dates or strings depending on serialization.
+        // Let's ensure we parse them effectively if they are strings.
+        const fetched = res.data.map((o: any) => ({
+          ...o,
+          total: Number(o.total) || 0,
+          createdAt: o.createdAt ? { seconds: new Date(o.createdAt).getTime() / 1000 } : { seconds: 0 } // Mock Timestamps for sorting compat
+        }));
 
-    return () => unsubscribe();
+        setOrders(fetched);
+      } catch (err) {
+        console.error("Orders Verification Failed:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
   }, [user]);
 
-  const clearAssociatedNotifications = async (orderId: string) => {
-    try {
-      const q = query(collection(db, "notifications"), where("userId", "==", user?.uid));
-      const snap = await getDocs(q);
-      const batch = writeBatch(db);
-      snap.docs.forEach(d => {
-        if (d.data().message.includes(orderId)) {
-          batch.update(d.ref, { isRead: true });
-        }
-      });
-      await batch.commit();
-    } catch (e) { console.error(e); }
-  };
+
 
   const handleStatusChange = async (order: Order, nextStatus: string) => {
     try {
-      await updateDoc(doc(db, "orders", order.id), {
-        status: nextStatus,
-        lastStatusUpdate: serverTimestamp()
-      });
+      if (!user) return;
+      await api.patch(`/orders/${order.id}/status`, { status: nextStatus });
 
-      await clearAssociatedNotifications(order.orderNumber);
-
-      await addDoc(collection(db, "notifications"), {
-        userId: order.customerId,
-        title: "Dispatch Node Status",
-        message: `Order #${order.orderNumber} transitioned to ${nextStatus}.`,
-        link: `/customer/track/${order.id}`,
-        type: 'ORDER',
-        isRead: false,
-        createdAt: serverTimestamp()
-      });
-    } catch (err) {
-      alert("Mesh failure: Status synchronization could not be broadcast.");
+      // Update local state optimistically or wait for snapshot? 
+      // Snapshot is active, so it should update automatically.
+      // But showing success helps.
+      // toast.success("Status updated"); // (If toast was imported, but simply waiting for snapshot is fine)
+    } catch (err: any) {
+      console.error("Status Update Failed", err);
+      const msg = err.response?.data?.message || err.message || "Update failed";
+      alert(`Status update failed: ${msg}`);
     }
   };
 
@@ -115,29 +99,15 @@ const VendorOrderFulfillment: React.FC = () => {
   const handleAssignRider = async (rider: RiderProfile) => {
     if (!assigningOrderId) return;
     try {
-      const targetOrder = orders.find(o => o.id === assigningOrderId);
-      await updateDoc(doc(db, "orders", assigningOrderId), {
+      await api.patch(`/orders/${assigningOrderId}/assign-rider`, {
         riderId: rider.id,
-        riderName: rider.name,
-        status: 'ACCEPTED',
-        lastUpdate: serverTimestamp()
-      });
-
-      if (targetOrder) await clearAssociatedNotifications(targetOrder.orderNumber);
-
-      await addDoc(collection(db, "notifications"), {
-        userId: rider.id,
-        title: "Priority Pickup",
-        message: `New dispatch request from ${profile?.businessName || 'Merchant'}.`,
-        link: `/rider/pickup/${assigningOrderId}`,
-        type: 'ORDER',
-        isRead: false,
-        createdAt: serverTimestamp()
+        riderName: rider.name
       });
 
       setAssigningOrderId(null);
-    } catch (err) {
-      alert("Assignment failure.");
+    } catch (err: any) {
+      console.error("Assignment Failed", err);
+      alert(`Assignment failed: ${err.response?.data?.message || "Unknown Error"}`);
     }
   };
 
@@ -236,6 +206,14 @@ const VendorOrderFulfillment: React.FC = () => {
                       Assign Captain
                     </button>
                   )}
+                  {['PENDING', 'ACCEPTED', 'PACKING'].includes(order.status) && (
+                    <button
+                      onClick={() => setCancelOrderId(order.id)}
+                      className="w-12 h-12 bg-red-50 dark:bg-red-500/10 rounded-xl flex items-center justify-center text-red-500 border border-red-100 dark:border-red-500/20 active:scale-95 transition-all"
+                    >
+                      <span className="material-symbols-outlined">cancel</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedDoc({ id: order.orderNumber, date: 'Today', vendor: profile?.businessName, customer: order.customerName, amount: `$${order.total.toFixed(2)}` })}
                     className="size-12 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-xl flex items-center justify-center text-gray-400 active:scale-95 transition-all"
@@ -274,6 +252,27 @@ const VendorOrderFulfillment: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={!!cancelOrderId}
+        onClose={() => setCancelOrderId(null)}
+        onConfirm={async () => {
+          if (!cancelOrderId) return;
+          try {
+            await api.post(`/orders/${cancelOrderId}/cancel-v2`, { reason: "Vendor unable to fulfill" });
+            setCancelOrderId(null);
+          } catch (e: any) {
+            console.error("Cancellation Refused:", e.response?.data || e.message);
+            // alert(`Cancellation failed: ${e.response?.data?.message || "Unknown Error"}`);
+            // Use debug log instead of alert for now, or just alert with more info
+            alert(`Cancellation failed: ${e.response?.data?.message || e.message}`);
+          }
+        }}
+        title="Cancel Order?"
+        message="This action will refund the customer immediately and revert stock. This cannot be undone."
+        confirmLabel="Yes, Cancel Order"
+        isDestructive={true}
+      />
 
       <DocumentModal isOpen={!!selectedDoc} onClose={() => setSelectedDoc(null)} type="PACKING_SLIP" data={selectedDoc || {}} />
       <BottomNav />

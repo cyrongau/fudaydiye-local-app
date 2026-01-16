@@ -37,21 +37,28 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
   const [otpCode, setOtpCode] = useState('');
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
 
-  // Initialize Recaptcha
+  // Lifecycle: Ensure generic Recaptcha container is ready & clean up
   useEffect(() => {
-    if ((window as any).recaptchaVerifier) return;
-
-    try {
-      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible',
-        'callback': () => {
-          // reCAPTCHA solved
-        }
-      });
-    } catch (e) {
-      console.error("Recaptcha Init Error", e);
-    }
+    return () => {
+      if ((window as any).recaptchaVerifier) {
+        try { (window as any).recaptchaVerifier.clear(); } catch (e) { }
+        (window as any).recaptchaVerifier = null;
+      }
+    };
   }, []);
+
+  const initVerifier = () => {
+    if (!(window as any).recaptchaVerifier) {
+      try {
+        (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          'size': 'invisible',
+          'callback': () => { /* solved */ }
+        });
+      } catch (e) {
+        console.error("Recaptcha Init Error", e);
+      }
+    }
+  };
 
   const normalizePhone = (num: string) => {
     return num.replace(/\D/g, '').replace(/^0+/, '');
@@ -76,21 +83,33 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
     }
 
     try {
+      initVerifier();
       const appVerifier = (window as any).recaptchaVerifier;
       const confirmation = await signInWithPhoneNumber(auth, identifier, appVerifier);
       setConfirmationResult(confirmation);
       setOtpSent(true);
     } catch (err: any) {
-      console.error("OTP Request Failed", err);
+      console.error("OTP Request Failed (Full Error):", err);
+      // Detailed diagnostics
       let msg = "Failed to send code.";
+      const errMsg = err.message || '';
+
       if (err.code === 'auth/captcha-check-failed') msg = "Security check failed. Please refresh.";
       else if (err.code === 'auth/invalid-phone-number') msg = "Invalid format. Use +252...";
-      else if (err.message.includes('reCAPTCHA')) msg = "Domain not verified. Check Firebase Console.";
-      else msg = err.message || "SMS Service Error.";
+      else if (err.code === 'auth/quota-exceeded') msg = "SMS Quota Exceeded. Try again later.";
+      else if (err.code === 'auth/missing-app-credential') msg = "App Check Failed. Domain not verified?";
+      else if (errMsg.includes('element has been removed')) msg = "Browser Error: Please refresh the page.";
+      else if (errMsg.includes('Domain not authorized') || errMsg.includes('reCAPTCHA')) msg = "Domain not verified in Firebase Console.";
+      else msg = errMsg || "SMS Service Error.";
 
-      setError(msg);
+      setError(`${msg} (Code: ${err.code || 'UNKNOWN'})`);
+
+      // Always reset verifier on failure to ensure a fresh DOM attachment next time
       if ((window as any).recaptchaVerifier) {
-        (window as any).recaptchaVerifier.clear();
+        try {
+          (window as any).recaptchaVerifier.clear();
+        } catch (e) { /* ignore */ }
+        (window as any).recaptchaVerifier = null;
       }
     } finally {
       setIsLoading(false);
@@ -152,41 +171,71 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue) return;
 
+    // Delegate OTP flows if active
     if (isOtpMode) {
-      if (!otpSent) {
-        handleSendOtp();
-      } else {
-        handleVerifyOtp();
-      }
+      if (otpSent) handleVerifyOtp();
+      else handleSendOtp();
       return;
     }
 
-    if (!password) return;
+    // Password Flow
     setError(null);
     setIsLoading(true);
 
-    let emailToUse = '';
-    if (method === 'email') {
-      emailToUse = inputValue.trim();
-    } else {
-      const cleanMobile = normalizePhone(inputValue);
-      emailToUse = `${selectedCountryCode}${cleanMobile}@fudaydiye.so`;
-    }
-
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, emailToUse, password);
-      await onLoginSuccess(userCredential.user.uid);
-    } catch (err: any) {
-      console.error("Login System Error:", err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        setError("Access Denied. Check credentials.");
-      } else {
-        setError(`Identity Error: ${err.code || 'Sync Failure'}`);
+      let email = inputValue;
+      if (method === 'phone') {
+        const cleanMobile = normalizePhone(inputValue);
+        if (!cleanMobile) throw new Error("Invalid phone number");
+        email = `${selectedCountryCode}${cleanMobile}@fudaydiye.so`;
       }
+
+      if (!email || !password) throw new Error("Please enter credentials");
+
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      await onLoginSuccess(cred.user.uid);
+    } catch (err: any) {
+      console.error("Login Failed", err);
+      setError("Invalid credentials or account not found.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const [isResetMode, setIsResetMode] = useState(false);
+
+  const handleForgotPassword = async () => {
+    setIsResetMode(true);
+    setMethod('email'); // Reset only works with email in this flow
+    setError(null);
+  };
+
+  const executeReset = async () => {
+    if (!inputValue) {
+      setError("Please enter your email.");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { sendPasswordResetEmail } = await import('firebase/auth');
+      await sendPasswordResetEmail(auth, inputValue);
+      setError("Password reset link sent to your email.");
+      setIsResetMode(false);
+    } catch (e: any) {
+      console.error(e);
+      setError("Failed to send reset link: " + e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isResetMode) {
+      executeReset();
+    } else {
+      handleLogin(e);
     }
   };
 
@@ -212,7 +261,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
       </div>
 
       <div className="mt-auto relative z-30 w-full bg-white/95 dark:bg-surface-dark/95 backdrop-blur-2xl rounded-t-[48px] p-10 pb-16 shadow-[0_-20px_80px_rgba(0,0,0,0.2)] border-t border-white/10">
-        <form onSubmit={handleLogin} className="flex flex-col gap-8 max-w-sm mx-auto">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-8 max-w-sm mx-auto">
           <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-2xl border border-gray-200 dark:border-white/10 relative">
             <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-secondary dark:bg-primary rounded-xl transition-all duration-500 ease-out shadow-lg ${method === 'phone' ? 'left-1' : 'left-[50%]'}`} />
             <button type="button" onClick={() => setMethod('phone')} className={`relative z-10 flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${method === 'phone' ? 'text-primary dark:text-secondary' : 'text-gray-400'}`}>Phone</button>
@@ -259,6 +308,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
+              {method === 'email' && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className="text-[9px] font-bold text-gray-400 hover:text-primary transition-colors uppercase tracking-wider"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             otpSent && (
@@ -292,7 +352,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
           >
             {isLoading || isVerifying ?
               <span className="animate-spin material-symbols-outlined">sync</span> :
-              (isOtpMode ? (otpSent ? 'Verify Code' : 'Send Code') : 'Authorize Session')
+              (isResetMode ? 'Send Reset Link' : (isOtpMode ? (otpSent ? 'Verify Code' : 'Send Code') : 'Authorize Session'))
             }
           </button>
 

@@ -1,5 +1,5 @@
 
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Param } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { CreateTransactionDto, RequestPayoutDto } from './dto/finance.dto';
 import { SettlementScheduler } from './settlement.scheduler';
@@ -65,5 +65,23 @@ export class FinanceController {
     @Roles(UserRole.ADMIN, UserRole.FUDAYDIYE_ADMIN)
     async triggerNightSettlement() {
         return this.settlementScheduler.settleNightShift();
+    }
+
+    @Post('payout/:id/authorize')
+    @Roles(UserRole.ADMIN, UserRole.FUDAYDIYE_ADMIN)
+    async authorizePayout(@Param('id') id: string, @User() user: any) {
+        return this.financeService.authorizePayout(id, user.uid);
+    }
+
+    @Get('payouts')
+    @Roles(UserRole.ADMIN, UserRole.FUDAYDIYE_ADMIN)
+    async getAllPayouts() {
+        return this.financeService.getAllPayouts();
+    }
+
+    @Get('transactions')
+    @Roles(UserRole.ADMIN, UserRole.FUDAYDIYE_ADMIN)
+    async getAllTransactions() {
+        return this.financeService.getAllTransactions();
     }
 }

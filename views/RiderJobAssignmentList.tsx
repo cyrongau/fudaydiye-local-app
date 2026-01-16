@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { useAuth } from '../Providers';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order } from '../types';
 
@@ -14,28 +15,42 @@ const RiderJobAssignmentList: React.FC = () => {
   const [assignments, setAssignments] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [rejectingJobId, setRejectingJobId] = useState<string | null>(null);
+
+  const handleRejectConfirm = async () => {
+    if (!rejectingJobId || !user) return;
+    try {
+      await import('../src/lib/services/riderService').then(m => m.RiderService.cancelJob(rejectingJobId, user.uid));
+      fetchAssignments();
+    } catch (e) { alert("Failed to cancel"); }
+  };
+
+
+
   useEffect(() => {
     if (!user) return;
 
-    // Sync jobs assigned to this specific rider
-    const q = query(
-      collection(db, "orders"),
-      where("riderId", "==", user.uid)
-    );
+    fetchAssignments();
+  }, [user?.uid]);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+  const fetchAssignments = async () => {
+    if (!user?.uid) return;
+    setLoading(true);
+    try {
+      const q = query(
+        collection(db, "orders"),
+        where("riderId", "==", user.uid)
+      );
+      const snapshot = await getDocs(q);
       const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-      // Sort client-side to ensure newest are first
       fetched.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setAssignments(fetched);
-      setLoading(false);
-    }, (err) => {
+    } catch (err) {
       console.error("Assignment Sync Error:", err);
+    } finally {
       setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [user]);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -59,6 +74,12 @@ const RiderJobAssignmentList: React.FC = () => {
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">Operational Queue</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => fetchAssignments()}
+            className="size-8 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center active:bg-gray-200"
+          >
+            <span className="material-symbols-outlined text-secondary dark:text-white text-lg">refresh</span>
+          </button>
           <div className="flex flex-col items-end">
             <span className="text-[10px] font-black text-primary uppercase tracking-widest leading-none mb-1">On Duty</span>
             <span className="text-xs font-bold text-secondary dark:text-white truncate max-w-[100px]">{profile?.fullName || 'Captain'}</span>
@@ -152,10 +173,21 @@ const RiderJobAssignmentList: React.FC = () => {
                         Navigate
                       </button>
                       {job.status === 'ACCEPTED' ? (
-                        <button
-                          onClick={() => navigate(`/rider/pickup/${job.id}`)}
-                          className="flex-1 h-14 bg-primary text-secondary rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-                        >Verify Pickup</button>
+                        <div className="flex gap-2 flex-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRejectingJobId(job.id);
+                            }}
+                            className="w-14 h-14 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-2xl font-black flex items-center justify-center active:scale-95 transition-all"
+                          >
+                            <span className="material-symbols-outlined">close</span>
+                          </button>
+                          <button
+                            onClick={() => navigate(`/rider/pickup/${job.id}`)}
+                            className="flex-1 h-14 bg-primary text-secondary rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                          >Verify Pickup</button>
+                        </div>
                       ) : (
                         <button
                           onClick={() => navigate(`/rider/confirm/${job.id}`)}
@@ -171,13 +203,25 @@ const RiderJobAssignmentList: React.FC = () => {
         )}
       </main>
 
+
+
+      <ConfirmationModal
+        isOpen={!!rejectingJobId}
+        onClose={() => setRejectingJobId(null)}
+        onConfirm={handleRejectConfirm}
+        title="Reject Assignment?"
+        message="This will remove the job from your queue and notify the dispatch hub. This action cannot be undone."
+        confirmLabel="Reject Job"
+        isDestructive={true}
+      />
+
       <BottomNav items={[
         { label: 'Home', icon: 'home', path: '/rider' },
         { label: 'Jobs', icon: 'assignment', path: '/rider/assignments' },
         { label: 'Wallet', icon: 'account_balance_wallet', path: '/rider/wallet' },
         { label: 'Settings', icon: 'settings', path: '/rider/settings' },
       ]} />
-    </div>
+    </div >
   );
 };
 

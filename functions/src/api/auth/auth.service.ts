@@ -1,7 +1,7 @@
 
 import { Injectable, Logger, BadRequestException, InternalServerErrorException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import { RequestOtpDto, VerifyOtpDto } from './dto/auth.dto';
+import { RequestOtpDto, VerifyOtpDto, RegisterUserDto } from './dto/auth.dto';
 import { CommunicationFactory } from '../../services/CommunicationFactory';
 
 @Injectable()
@@ -127,6 +127,95 @@ export class AuthService {
         } catch (e) {
             this.logger.error("Token Minting Failed:", e);
             throw new InternalServerErrorException("Failed to authenticate session.");
+        }
+    }
+    async registerUser(dto: RegisterUserDto) {
+        const { email, password, fullName, mobile, anonUid, role = 'CUSTOMER' } = dto;
+        let uid = anonUid;
+
+        // Security: Prevent Admin Creation via Public API
+        if (role === 'ADMIN' as any || role === 'FUDAYDIYE_ADMIN' as any) {
+            throw new ForbiddenException("Administrative accounts cannot be created publicly.");
+        }
+
+        try {
+            // 1. Create or Update Auth User
+            if (uid) {
+                // Upgrade Anon
+                await admin.auth().updateUser(uid, {
+                    email,
+                    password,
+                    displayName: fullName,
+                    emailVerified: false
+                });
+            } else {
+                // Create New
+                const user = await admin.auth().createUser({
+                    email,
+                    password,
+                    displayName: fullName,
+                    emailVerified: false,
+                    disabled: false
+                });
+                uid = user.uid;
+            }
+
+            // 2. Set Custom Claims (Role based)
+            await admin.auth().setCustomUserClaims(uid!, { role });
+
+            // 3. Prepare Firestore Profile Data
+            const baseProfile = {
+                uid,
+                email,
+                fullName,
+                mobile: mobile || '',
+                role,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                isVerified: false, // Default to false
+                walletBalance: 0,
+                trustScore: 60,
+                trustTier: 'BRONZE'
+            };
+
+            let extraFields = {};
+            if (role === 'VENDOR') {
+                extraFields = {
+                    businessName: dto.businessName || dto.fullName,
+                    businessCategory: dto.businessCategory || 'General',
+                };
+            } else if (role === 'RIDER') {
+                extraFields = {
+                    vehicleType: dto.vehicleType || 'Motorcycle',
+                    plateNumber: dto.plateNumber || 'Pending'
+                };
+            } else if (role === 'CLIENT') {
+                extraFields = {
+                    enterpriseName: dto.businessName, // Re-use businessName field from DTO for enterprise
+                }
+            }
+
+            // 4. Create/Update Document
+            await this.db.collection('users').doc(uid!).set({
+                ...baseProfile,
+                ...extraFields
+            }, { merge: true });
+
+            const customToken = await admin.auth().createCustomToken(uid!);
+
+            return {
+                success: true,
+                uid,
+                token: customToken,
+                role,
+                message: `Account created successfully as ${role}.`
+            };
+
+        } catch (e: any) {
+            this.logger.error("Registration Failed", e);
+            if (e.code === 'auth/email-already-exists') {
+                throw new BadRequestException("Email already in use.");
+            }
+            throw new InternalServerErrorException("Registration failed: " + e.message);
         }
     }
 }

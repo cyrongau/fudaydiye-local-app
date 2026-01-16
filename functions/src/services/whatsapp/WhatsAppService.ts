@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import axios from 'axios';
 import { ICommunicationProvider, NotificationPayload } from '../CommunicationService';
 
@@ -7,7 +7,7 @@ export class WhatsAppService implements ICommunicationProvider {
     private config: any;
 
     constructor() {
-        const config = functions.config().whatsapp;
+        const config = (functions as any).config().whatsapp;
         this.config = config;
     }
 

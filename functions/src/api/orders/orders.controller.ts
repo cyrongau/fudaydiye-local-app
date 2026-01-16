@@ -1,9 +1,12 @@
 
-import { Controller, Post, Body, Get, Param, Query, UsePipes, ValidationPipe, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Query, UsePipes, ValidationPipe, UseGuards, Patch } from '@nestjs/common';
 import { OrdersService } from './orders.service';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateOrderDto, UpdateOrderStatusDto, AssignRiderDto } from './dto/orders.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { User } from '../common/decorators/user.decorator';
+import { UserRole } from '../users/dto/users.dto';
 
 @Controller('orders')
 export class OrdersController {
@@ -29,11 +32,14 @@ export class OrdersController {
 
     @Get()
     @UseGuards(JwtAuthGuard)
-    findAll(@Query('limit') limit: number, @Query('status') status: string, @Query('riderId') riderId: string) {
-        // TODO: Filter by User Role (Vendor sees own, User sees own)
-        // For now, exposing all might be insecure if not careful.
-        // Let's keep as is but authenticated.
-        return this.ordersService.findAll(limit, status, riderId);
+    @Get()
+    @UseGuards(JwtAuthGuard)
+    findAll(
+        @Query('limit') limit: number,
+        @Query('status') status: string,
+        @User() user: any
+    ) {
+        return this.ordersService.findAll(user, limit, status);
     }
 
     @Get(':id')
@@ -43,11 +49,32 @@ export class OrdersController {
     }
 
     @Post(':id/pay')
-    // @UseGuards(JwtAuthGuard) // Needed? Start secure.
+    @UseGuards(JwtAuthGuard)
     async initiatePayment(
         @Param('id') id: string,
-        @Body() body: { userId: string; paymentMethod: string; paymentDetails: any }
+        @Body() body: { paymentMethod: string; paymentDetails: any },
+        @User() user: any
     ) {
-        return this.ordersService.initiatePayment(id, body.userId, body.paymentMethod, body.paymentDetails);
+        return this.ordersService.initiatePayment(id, user.uid, body.paymentMethod, body.paymentDetails);
+    }
+
+    @Post(':id/cancel-v2')
+    @UseGuards(JwtAuthGuard)
+    async cancelOrder(@Param('id') orderId: string, @Body() body: { reason?: string }, @User() user: any) {
+        return this.ordersService.cancelOrder(orderId, user.uid, body.reason, user.role);
+    }
+
+    @Patch(':id/status')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.VENDOR, UserRole.FUDAYDIYE_ADMIN)
+    updateStatus(@Param('id') id: string, @Body() body: UpdateOrderStatusDto, @User() user: any) {
+        return this.ordersService.updateStatus(id, body.status, user.uid);
+    }
+
+    @Patch(':id/assign-rider')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.VENDOR, UserRole.FUDAYDIYE_ADMIN)
+    assignRider(@Param('id') id: string, @Body() body: AssignRiderDto, @User() user: any) {
+        return this.ordersService.assignRider(id, body.riderId, body.riderName, user.uid);
     }
 }

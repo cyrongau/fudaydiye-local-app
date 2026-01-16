@@ -5,6 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
+import { api } from '../src/services/api';
 import { useToast } from '../context/ToastContext';
 
 const AdminConfig: React.FC = () => {
@@ -20,7 +21,8 @@ const AdminConfig: React.FC = () => {
   const [settings, setSettings] = useState({
     commission: 10,
     expressFee: 5.0,
-    dynamicPricingActive: true
+    dynamicPricingActive: true,
+    exchangeRate: 8500
   });
 
   const [integrations, setIntegrations] = useState({
@@ -34,6 +36,7 @@ const AdminConfig: React.FC = () => {
     livekit: { apiKey: '', apiSecret: '', host: '', active: false },
     whatsapp: { phoneId: '', token: '', namespace: '', active: false },
     sms: { provider: 'twilio', apiKey: '', senderId: '', sid: '', active: false },
+    smtp: { host: '', port: '587', user: '', pass: '', fromEmail: '', active: false },
     // Dropshipping
     amazonUae: { apiKey: '', secretKey: '', marketplaceId: '', active: false },
     alibaba: { apiKey: '', secretKey: '', active: false },
@@ -74,6 +77,7 @@ const AdminConfig: React.FC = () => {
               amazonUae: data.integrations.amazonUae || prev.amazonUae,
               alibaba: data.integrations.alibaba || prev.alibaba,
               aliexpress: data.integrations.aliexpress || prev.aliexpress,
+              smtp: data.integrations.smtp || prev.smtp,
             }));
           }
           if (data.settings) setSettings(prev => ({ ...prev, ...data.settings }));
@@ -152,20 +156,43 @@ const AdminConfig: React.FC = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await setDoc(doc(db, "system_config", "global"), {
+      await api.patch('/admin/config', {
         integrations,
         settings,
-        business,
-        updatedAt: serverTimestamp(),
-        updatedBy: 'admin'
-      }, { merge: true });
+        business
+      });
       toastSuccess('Ecosystem configuration synchronized.');
-    } catch (err) {
+    } catch (err: any) {
       console.error("Save Error:", err);
-      // @ts-ignore
       toastError(`Sync Error: ${err.message || 'Unknown node failure'}`);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleTestConnection = async (type: 'EMAIL' | 'SMS') => {
+    setUploading(`TEST_${type}`); // Reuse uploading state for spinner
+    try {
+      // Prompt for email/phone if needed, or use a default override for quick test
+      // For UX, let's just send to the current business email or a placeholder admin email
+      // Ideally we ask the user, but for "Polish" a prompt is acceptable or just send to business.email
+      const target = type === 'EMAIL' ? business.email : business.phone;
+
+      if (!target) {
+        toastError(`Please set Business ${type === 'EMAIL' ? 'Email' : 'Phone'} first.`);
+        return;
+      }
+
+      await api.post('/notifications/test', {
+        type,
+        to: target
+      });
+      toastSuccess(`${type} Test Signal Sent to ${target}`);
+    } catch (err: any) {
+      console.error("Test Error:", err);
+      toastError(`Test Failed: ${err.message || 'Check Server Logs'}`);
+    } finally {
+      setUploading(null);
     }
   };
 
@@ -477,6 +504,23 @@ const AdminConfig: React.FC = () => {
                   <span className="text-lg font-black text-primary">%</span>
                 </div>
               </div>
+
+              <div className="p-8 flex items-center justify-between">
+                <div>
+                  <p className="text-base font-black text-secondary dark:text-white leading-tight uppercase tracking-tighter">Exchange Rate (USD to SLSH)</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em] mt-2">Base Conversion Node</p>
+                </div>
+                <div className="flex items-center gap-3 bg-gray-100 dark:bg-white/5 px-4 py-3 rounded-2xl border border-gray-100 dark:border-white/10">
+                  <span className="text-lg font-black text-gray-400">$1 = </span>
+                  <input
+                    type="number"
+                    value={settings.exchangeRate}
+                    onChange={(e) => setSettings({ ...settings, exchangeRate: parseInt(e.target.value) || 8500 })}
+                    className="w-20 bg-transparent border-none p-0 text-lg font-black focus:ring-0 text-right text-secondary dark:text-white"
+                  />
+                  <span className="text-xs font-bold text-gray-400 tracking-wider">SLSH</span>
+                </div>
+              </div>
             </ConfigGroup>
           </section>
         )}
@@ -589,6 +633,51 @@ const AdminConfig: React.FC = () => {
                     Firebase Authentication SMS is configured automatically via GCIP. No manual keys required here for basic Auth OTP.
                   </div>
                 )}
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => handleTestConnection('SMS')}
+                    disabled={!!uploading}
+                    className="px-4 py-2 bg-gray-100 dark:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-secondary transition-all flex items-center gap-2"
+                  >
+                    {uploading === 'TEST_SMS' ? <span className="animate-spin material-symbols-outlined text-sm">sync</span> : <span className="material-symbols-outlined text-sm">broadcast_on_personal</span>}
+                    Test Signal
+                  </button>
+                </div>
+              </div>
+            </IntegrationCard>
+          </section>
+        )}
+
+        {/* SMTP INTEGRATION ADDED HERE */}
+        {activeTab === 'COMMUNICATIONS' && integrations.smtp && (
+          <section className="mt-8">
+            <IntegrationCard
+              name="Email Server (SMTP)"
+              desc="Custom Mail Relay"
+              icon="mail"
+              active={integrations.smtp?.active}
+              onToggle={() => setIntegrations({ ...integrations, smtp: { ...integrations.smtp, active: !integrations.smtp?.active } })}
+            >
+              <div className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <CredentialField label="SMTP Host" value={integrations.smtp?.host || ''} onChange={(val) => setIntegrations({ ...integrations, smtp: { ...integrations.smtp, host: val } })} />
+                  <CredentialField label="Port" value={integrations.smtp?.port || ''} onChange={(val) => setIntegrations({ ...integrations, smtp: { ...integrations.smtp, port: val } })} />
+                </div>
+                <CredentialField label="User / Email" value={integrations.smtp?.user || ''} onChange={(val) => setIntegrations({ ...integrations, smtp: { ...integrations.smtp, user: val } })} />
+                <CredentialField label="Password / App Key" value={integrations.smtp?.pass || ''} onChange={(val) => setIntegrations({ ...integrations, smtp: { ...integrations.smtp, pass: val } })} isSecret />
+                <CredentialField label="From Email Address" value={integrations.smtp?.fromEmail || ''} onChange={(val) => setIntegrations({ ...integrations, smtp: { ...integrations.smtp, fromEmail: val } })} />
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => handleTestConnection('EMAIL')}
+                    disabled={!!uploading}
+                    className="px-4 py-2 bg-gray-100 dark:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-secondary transition-all flex items-center gap-2"
+                  >
+                    {uploading === 'TEST_EMAIL' ? <span className="animate-spin material-symbols-outlined text-sm">sync</span> : <span className="material-symbols-outlined text-sm">mark_email_read</span>}
+                    Test Relay
+                  </button>
+                </div>
               </div>
             </IntegrationCard>
           </section>

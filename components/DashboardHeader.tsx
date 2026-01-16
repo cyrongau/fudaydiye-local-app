@@ -120,7 +120,7 @@ const DashboardHeader: React.FC = () => {
           <div className="relative" ref={notifRef}>
             <button
               onClick={() => setIsNotifOpen(!isNotifOpen)}
-              className={`size-11 rounded-full flex items-center justify-center transition-all ${isNotifOpen ? 'bg-primary text-secondary shadow-lg' : 'hover:bg-gray-50 dark:hover:bg-white/5 text-gray-400'}`}
+              className={`size-11 rounded-full flex items-center justify-center transition-all ${isNotifOpen ? 'bg-primary text-secondary shadow-lg' : 'hover:bg-gray-50 dark:hover:bg-white/5 text-gray-400'} ${unreadCount > 0 && !isNotifOpen ? 'animate-wiggle' : ''}`}
             >
               <span className="material-symbols-outlined text-[24px]">notifications</span>
               {unreadCount > 0 && (

@@ -42,7 +42,7 @@ const MobileMenu: React.FC = () => {
         { icon: 'bar_chart', path: '/admin/reports', label: 'Treasury', color: 'bg-green-100 text-green-600' },
         { icon: 'local_shipping', path: '/admin/logistics', label: 'Fleet Control', color: 'bg-indigo-100 text-indigo-600' },
         { icon: 'videocam', path: '/admin/live-moderation', label: 'Live Terminal', color: 'bg-red-100 text-red-600' },
-        { icon: 'group', path: '/admin/users', label: 'Merchants', color: 'bg-yellow-100 text-yellow-600' },
+        { icon: 'group', path: '/admin/users', label: 'Identity Nodes', color: 'bg-yellow-100 text-yellow-600' },
         { icon: 'two_wheeler', path: '/admin/riders', label: 'Riders', color: 'bg-teal-100 text-teal-600' },
         { icon: 'article', path: '/admin/cms', label: 'CMS Terminal', color: 'bg-pink-100 text-pink-600' },
         { icon: 'security', path: '/admin/audits', label: 'Security Log', color: 'bg-gray-100 text-gray-600' },

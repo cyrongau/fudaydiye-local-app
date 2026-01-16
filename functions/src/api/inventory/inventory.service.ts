@@ -1,5 +1,6 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 
 @Injectable()
@@ -11,20 +12,38 @@ export class InventoryService {
         this.db = admin.firestore();
     }
 
-    async adjustStock(dto: AdjustStockDto, performedBy: string, externalTransaction?: admin.firestore.Transaction): Promise<any> {
+    async adjustStock(dto: AdjustStockDto, user: { uid: string, role: string }, externalTransaction?: admin.firestore.Transaction, preloadedStock?: number): Promise<any> {
         const { productId, change, reason, notes, orderId } = dto;
         const productRef = this.db.collection('products').doc(productId);
         const transactionRef = this.db.collection('inventory_transactions').doc();
 
         const operation = async (t: admin.firestore.Transaction) => {
-            const productSnap = await t.get(productRef);
+            let currentStock = 0;
 
-            if (!productSnap.exists) {
-                throw new NotFoundException(`Product ${productId} not found`);
+            if (preloadedStock !== undefined) {
+                currentStock = preloadedStock;
+                // We can't check ownership easily here without reading.
+                // Valid assumption: Internal system calls (OrdersService) are trusted (User is Customer, but System acts).
+            } else {
+                const productSnap = await t.get(productRef);
+                if (!productSnap.exists) {
+                    throw new NotFoundException(`Product ${productId} not found`);
+                }
+                const productData = productSnap.data();
+                // Better: Pass `user` object to service, or role. 
+                // Let's modify service signature lightly to accept role or pass the check responsibility.
+                // Or just do: if product.vendorId != performedBy... wait, Admins have different ID.
+                // The Caller (Controller) knows the Role.
+
+                currentStock = productData?.baseStock || 0;
+                const productVendorId = productData?.vendorId; // Declare here
+
+                // Ownership Check
+                if (user.role === 'VENDOR' && productVendorId !== user.uid) {
+                    throw new ForbiddenException("You do not own this product.");
+                }
             }
 
-            const productData = productSnap.data();
-            const currentStock = productData?.baseStock || 0;
             const newStock = currentStock + change;
 
             // Validation: Prevent negative stock unless explicitly allowed
@@ -35,7 +54,7 @@ export class InventoryService {
             // Update Product
             t.update(productRef, {
                 baseStock: newStock,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                updatedAt: FieldValue.serverTimestamp()
             });
 
             // Create Audit Record
@@ -45,10 +64,10 @@ export class InventoryService {
                 reason,
                 previousStock: currentStock,
                 newStock,
-                performedBy,
+                performedBy: user.uid,
                 notes: notes || '',
                 orderId: orderId || null,
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
+                createdAt: FieldValue.serverTimestamp()
             });
 
             return { success: true, newStock };
@@ -65,7 +84,7 @@ export class InventoryService {
         } catch (error: any) {
             this.logger.error(`Stock adjustment failed for ${productId}`, error);
             if (error.status) throw error;
-            throw new InternalServerErrorException("Failed to adjust inventory");
+            throw new InternalServerErrorException(`Failed to adjust inventory: ${error.message}`);
         }
     }
 

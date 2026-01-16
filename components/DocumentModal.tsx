@@ -1,5 +1,6 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export type DocumentType = 'INVOICE' | 'PACKING_SLIP' | 'SHIPPING_RECEIPT';
 
@@ -23,7 +24,14 @@ interface DocumentModalProps {
 }
 
 const DocumentModal: React.FC<DocumentModalProps> = ({ isOpen, onClose, type, data }) => {
-  if (!isOpen) return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const handleDownload = async () => {
     const btn = document.getElementById('download-btn');
@@ -80,7 +88,7 @@ const DocumentModal: React.FC<DocumentModalProps> = ({ isOpen, onClose, type, da
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose}></div>
 
@@ -185,8 +193,10 @@ const DocumentModal: React.FC<DocumentModalProps> = ({ isOpen, onClose, type, da
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
+
 
 export default DocumentModal;

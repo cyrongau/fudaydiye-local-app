@@ -155,6 +155,9 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     useEffect(() => {
         if (!syncCartId) return;
+        // Optimization: Riders and Vendors don't use the Cart/Wishlist
+        if (role === 'RIDER' || role === 'VENDOR' || role === 'ADMIN') return;
+
         const unsub = onSnapshot(doc(db, "carts", syncCartId), (snap) => {
             if (snap.exists()) {
                 setCart(snap.data().items || []);
@@ -162,11 +165,11 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
                 setCart([]);
             }
         }, (error) => {
-            // If permission denied error happens here, it means rules need check, but for Anon it should pass if rules allow 'isSignedIn()'
-            console.error("Cart sync error:", error);
+            // Ignore permission errors for non-cart users
+            console.warn("Cart sync skipped/failed", error.code);
         });
         return () => unsub();
-    }, [syncCartId]);
+    }, [syncCartId, role]);
 
     const updateCloudCart = async (newItems: CartItem[]) => {
         if (!syncCartId) return;
@@ -229,8 +232,8 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     // Sync Wishlist
     useEffect(() => {
-        if (!syncCartId) return; // Re-using syncCartId as a generic user/guest ID identifier for simplicity, or we can make a separate one.
-        // Let's use the same ID strategy: auth uid or guest_cart_id.
+        if (!syncCartId) return;
+        if (role === 'RIDER' || role === 'VENDOR' || role === 'ADMIN') return;
 
         const docRef = doc(db, "wishlists", syncCartId);
         const unsub = onSnapshot(docRef, (snap) => {
@@ -239,9 +242,9 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
             } else {
                 setWishlist([]);
             }
-        }, (error) => console.error("Wishlist sync error:", error));
+        }, (error) => console.warn("Wishlist sync skipped", error.code));
         return () => unsub();
-    }, [syncCartId]);
+    }, [syncCartId, role]);
 
     const updateCloudWishlist = async (newItems: WishlistItem[]) => {
         if (!syncCartId) return;

@@ -1,5 +1,5 @@
 
-import { IsNotEmpty, IsNumber, IsString, IsArray, ValidateNested, IsOptional, IsBoolean } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, IsArray, ValidateNested, IsOptional, IsBoolean, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CartItemDto {
@@ -61,4 +61,21 @@ export class CreateOrderDto {
     @IsString()
     @IsOptional()
     syncCartId?: string;
+}
+
+export class UpdateOrderStatusDto {
+    @IsString()
+    @IsNotEmpty()
+    @IsEnum(['PENDING', 'ACCEPTED', 'PACKING', 'SHIPPED', 'DELIVERED', 'CANCELLED'])
+    status!: string;
+}
+
+export class AssignRiderDto {
+    @IsString()
+    @IsNotEmpty()
+    riderId!: string;
+
+    @IsString()
+    @IsNotEmpty()
+    riderName!: string;
 }

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
@@ -21,10 +22,17 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     cancelLabel = "Cancel",
     isDestructive = false
 }) => {
-    if (!isOpen) return null;
+    const [mounted, setMounted] = useState(false);
 
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
+
+    if (!isOpen || !mounted) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
@@ -64,8 +72,10 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
+
 
 export default ConfirmationModal;

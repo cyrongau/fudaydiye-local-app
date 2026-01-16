@@ -32,7 +32,12 @@ const RiderJobs: React.FC = () => {
     // If rider is "Central" or undefined, show all. Otherwise, filter strictly.
     // 1. Robust Query: Fetch recent orders and filter client-side to prevent Index/Assertion errors
     // Simple query on collection reference
-    const q = query(collection(db, "orders"));
+    // Optimized Query: Filter for PENDING orders only to prevent over-fetching
+    const q = query(
+      collection(db, "orders"),
+      where("status", "==", "PENDING"),
+      where("riderId", "==", null), // Only unassigned orders
+    );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));

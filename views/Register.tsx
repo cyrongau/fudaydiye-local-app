@@ -88,43 +88,45 @@ const Register: React.FC<RegisterProps> = ({ onRegister, setAppRole }) => {
       const cleanMobile = normalizePhone(formData.mobile);
       const identityEmail = formData.email || `${selectedCountryCode}${cleanMobile}@fudaydiye.so`;
 
-      const userCredential = await createUserWithEmailAndPassword(auth, identityEmail, formData.password);
-      const user = userCredential.user;
+      const { api } = await import('../src/services/api'); // Ensure api is imported
 
-      const profileData = {
-        uid: user.uid,
-        fullName: formData.fullName,
-        role: selectedRole,
-        mobile: `${selectedCountryCode}${cleanMobile}`,
+      const payload = {
         email: identityEmail,
-        location: formData.location || 'Hargeisa',
-        walletBalance: 0,
-        rewardPoints: 0,
-        trustScore: 60,
-        trustTier: 'BRONZE',
-        createdAt: serverTimestamp(),
-        avatar: `https://ui-avatars.com/api/?name=${formData.fullName}&background=015754&color=06DC7F`,
-        ...((selectedRole === 'VENDOR' || selectedRole === 'FUDAYDIYE_ADMIN') && { businessName: formData.businessIdentity, businessCategory: formData.category, lat: 9.5624, lng: 44.0770 }),
-        ...(selectedRole === 'RIDER' && { vehicleType: formData.vehicleType, plateNumber: formData.plateNumber }),
-        ...(selectedRole === 'CLIENT' && { enterpriseName: formData.enterpriseName, operationalHub: formData.operationalHub })
+        password: formData.password,
+        fullName: formData.fullName,
+        mobile: `${selectedCountryCode}${cleanMobile}`,
+        role: selectedRole,
+        // Optional fields based on role
+        businessName: (selectedRole === 'VENDOR' || selectedRole === 'FUDAYDIYE_ADMIN' || selectedRole === 'CLIENT') ? (formData.businessIdentity || formData.enterpriseName) : undefined,
+        businessCategory: selectedRole === 'VENDOR' ? formData.category : undefined,
+        vehicleType: selectedRole === 'RIDER' ? formData.vehicleType : undefined,
+        plateNumber: selectedRole === 'RIDER' ? formData.plateNumber : undefined,
+        operationalHub: selectedRole === 'CLIENT' ? formData.operationalHub : undefined
       };
 
-      await setDoc(doc(db, "users", user.uid), profileData);
-      setAppRole(selectedRole);
-      onRegister();
+      const res = await api.post('/auth/register', payload);
 
-      const routes: Record<UserRole, string> = {
-        CUSTOMER: '/customer',
-        VENDOR: '/vendor',
-        RIDER: '/rider',
-        CLIENT: '/client',
-        ADMIN: '/admin',
-        FUDAYDIYE_ADMIN: '/vendor'
-      };
-      navigate(routes[selectedRole]);
+      if (res.data.success && res.data.token) {
+        const { signInWithCustomToken } = await import('firebase/auth');
+        await signInWithCustomToken(auth, res.data.token);
+
+        setAppRole(selectedRole);
+        onRegister();
+
+        const routes: Record<UserRole, string> = {
+          CUSTOMER: '/customer',
+          VENDOR: '/vendor',
+          RIDER: '/rider',
+          CLIENT: '/client',
+          ADMIN: '/admin',
+          FUDAYDIYE_ADMIN: '/vendor'
+        };
+        navigate(routes[selectedRole]);
+      }
+
     } catch (err: any) {
       console.error("Registration Error:", err);
-      setError(err.code === 'auth/email-already-in-use' ? "Identity Node already registered." : err.message || 'Verification failure.');
+      setError(err.response?.data?.message || err.message || 'Registration failure.');
     } finally {
       setIsLoading(false);
     }

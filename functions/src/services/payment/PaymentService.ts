@@ -276,6 +276,21 @@ class PremierWalletProvider implements IPaymentProvider {
 }
 
 // ==========================================
+// 5. Simulated Provider (For Testing)
+// ==========================================
+class SimulatedProvider implements IPaymentProvider {
+    async initiate(request: PaymentRequest): Promise<PaymentResult> {
+        return {
+            success: true,
+            status: 'COMPLETED',
+            transactionId: `sim_${Date.now()}`,
+            message: "Simulated Payment Successful",
+            gatewayMetadata: { mode: 'simulation' }
+        };
+    }
+}
+
+// ==========================================
 // FACTORY
 // ==========================================
 export class PaymentFactory {
@@ -300,6 +315,9 @@ export class PaymentFactory {
             case 'MASTERCARD':
             case 'VISA':
                 return new PremierBankProvider();
+
+            case 'SIMULATED':
+                return new SimulatedProvider();
 
             default:
                 throw new Error(`Payment method ${method} not supported.`);

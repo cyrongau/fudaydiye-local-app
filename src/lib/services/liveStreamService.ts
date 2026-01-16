@@ -16,6 +16,7 @@ import {
     FirestoreError
 } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
+import { api } from '@/src/services/api';
 
 import { LiveSession, ChatMessage, CreateSessionPayloadSchema, ChatMessageSchema } from '../schemas/liveSession';
 import { Product } from '../../../types';
@@ -122,11 +123,12 @@ class LiveStreamService {
      * Update session status (e.g. from SCHEDULED to LIVE, or to ENDED).
      */
     async updateSessionStatus(sessionId: string, status: 'LIVE' | 'ENDED'): Promise<void> {
-        const updateData: any = { status };
-        if (status === 'ENDED') {
-            updateData.endedAt = serverTimestamp();
+        try {
+            await api.patch(`/live/${sessionId}/status`, { status });
+        } catch (error) {
+            console.error("Error updating session status:", error);
+            throw error;
         }
-        await updateDoc(doc(db, "live_sessions", sessionId), updateData);
     }
 
 
@@ -136,8 +138,8 @@ class LiveStreamService {
      */
     async createSession(data: {
         vendorId: string;
-        vendorName: string;
-        hostAvatar: string;
+        vendorName: string; // Deprecated: Handled by Backend
+        hostAvatar: string; // Deprecated: Handled by Backend
         title: string;
         category: string;
         mode: 'LIVE' | 'SCHEDULE';
@@ -146,28 +148,15 @@ class LiveStreamService {
         scheduledAt?: any;
     }): Promise<string> {
         try {
-            // Validate Payload
-            const validatedData = CreateSessionPayloadSchema.parse(data);
-
-            const docRef = await addDoc(collection(db, "live_sessions"), {
-                vendorId: validatedData.vendorId,
-                hostId: validatedData.vendorId, // Required by Firestore Rules
-                vendorName: validatedData.vendorName || "Merchant",
-                hostAvatar: validatedData.hostAvatar || "",
-                title: validatedData.title,
-                category: validatedData.category,
-                status: validatedData.mode === 'LIVE' ? 'LIVE' : 'SCHEDULED',
-                viewerCount: 0,
-                featuredProductId: validatedData.featuredProduct?.id || null,
-                featuredProductName: validatedData.featuredProduct?.name || null,
-                featuredProductPrice: validatedData.featuredProduct?.basePrice || validatedData.featuredProduct?.price || null,
-                featuredProductImg: validatedData.featuredProduct?.images?.[0] || null,
-                streamUrl: '',
-                createdAt: serverTimestamp(),
-                scheduledAt: validatedData.scheduledAt || null,
-                productIds: validatedData.productIds || []
-            });
-            return docRef.id;
+            // Backend handles vendorId etc from token ideally, but we pass payload
+            const payload = {
+                title: data.title,
+                category: data.category,
+                mode: data.mode,
+                productIds: data.productIds || []
+            };
+            const res = await api.post('/live', payload);
+            return res.data.id;
         } catch (error) {
             console.error("Error creating session:", error);
             throw error;
@@ -179,7 +168,7 @@ class LiveStreamService {
      */
     async updateSession(sessionId: string, data: Partial<LiveSession>): Promise<void> {
         try {
-            await updateDoc(doc(db, "live_sessions", sessionId), data);
+            await api.patch(`/live/${sessionId}`, data);
         } catch (error) {
             console.error("Error updating session:", error);
             throw error;
@@ -191,12 +180,7 @@ class LiveStreamService {
      */
     async pinProductToStream(sessionId: string, product: Product): Promise<void> {
         try {
-            await updateDoc(doc(db, "live_sessions", sessionId), {
-                featuredProductId: product.id,
-                featuredProductName: product.name,
-                featuredProductPrice: product.basePrice || product.salePrice || 0, // Fallback to 0 if undefined
-                featuredProductImg: product.images?.[0] || null
-            });
+            await api.patch(`/live/${sessionId}/pin`, { productId: product.id });
         } catch (error) {
             console.error("Error pinning product:", error);
             throw error;

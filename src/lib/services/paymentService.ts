@@ -1,4 +1,4 @@
-import { api } from '../api';
+import { api } from '../../services/api';
 import { Order, CartItem } from '../../../types';
 import { auth } from '../../../lib/firebase'; // Need auth for userId if not passed
 
@@ -54,7 +54,6 @@ export class PaymentService {
             const userId = auth.currentUser?.uid || 'guest';
 
             const response = await api.post(`/orders/${payload.orderId}/pay`, {
-                userId: userId,
                 paymentMethod: payload.paymentMethod,
                 paymentDetails: payload.paymentDetails
             });

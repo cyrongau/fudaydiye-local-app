@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { api } from '../src/services/api';
 import { CMSContent, Product } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 import ProductPickerModal from '../components/ProductPickerModal';
@@ -16,6 +17,7 @@ const AdminCMSEditor: React.FC = () => {
 
   const [loading, setLoading] = useState(!!id);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [isAiOptimizing, setIsAiOptimizing] = useState(false);
   const [isSlugLocked, setIsSlugLocked] = useState(false);
 
@@ -91,7 +93,6 @@ const AdminCMSEditor: React.FC = () => {
   const handleSave = async () => {
     setIsSaving(true);
     const content = editorRef.current?.innerHTML || '';
-    const docId = id || Math.random().toString(36).substring(7);
 
     // Sanitize payload
     const payload = {
@@ -109,12 +110,14 @@ const AdminCMSEditor: React.FC = () => {
       linkedProductId: formState.linkedProductId || '',
       linkedVendorId: formState.linkedVendorId || '',
       section: formState.section || 'HOME_TOP_ROW',
-      updatedAt: serverTimestamp(),
-      createdAt: formState.createdAt || serverTimestamp(),
     };
 
     try {
-      await setDoc(doc(db, "cms_content", docId), payload);
+      if (id) {
+        await api.patch(`/admin/cms/${id}`, payload);
+      } else {
+        await api.post('/admin/cms', payload);
+      }
       setToast({ message: 'Content synced to ecosystem successfully.', type: 'success' });
       setTimeout(() => navigate('/admin/cms'), 1000);
     } catch (err: any) {
@@ -125,12 +128,33 @@ const AdminCMSEditor: React.FC = () => {
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setFormState(prev => ({ ...prev, featuredImage: reader.result as string }));
-      reader.readAsDataURL(file);
+      if (file.size > 5 * 1024 * 1024) {
+        setToast({ message: 'File size too large (Max 5MB)', type: 'error' });
+        return;
+      }
+
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await api.post('/media/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+
+        if (res.data.success && res.data.url) {
+          setFormState(prev => ({ ...prev, featuredImage: res.data.url }));
+          setToast({ message: 'Image uploaded to cloud.', type: 'success' });
+        }
+      } catch (err: any) {
+        console.error('Upload Error:', err);
+        setToast({ message: 'Upload failed. Try again.', type: 'error' });
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -303,11 +327,24 @@ const AdminCMSEditor: React.FC = () => {
               className="relative aspect-video rounded-[32px] overflow-hidden bg-gray-50 dark:bg-black/20 border-2 border-dashed border-gray-200 dark:border-white/10 flex flex-col items-center justify-center cursor-pointer group hover:border-primary transition-all shadow-inner"
             >
               {formState.featuredImage ? (
-                <img src={formState.featuredImage} className="w-full h-full object-cover" alt="Hero Asset" />
+                <div className="relative w-full h-full group-hover:opacity-90 transition-opacity">
+                  <img src={formState.featuredImage} className="w-full h-full object-cover" alt="Hero Asset" />
+                  {isUploading && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <div className="size-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <span className="material-symbols-outlined text-4xl text-gray-300">image_search</span>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">Add Hero Background</span>
+                  {isUploading ? (
+                    <div className="size-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-4xl text-gray-300">image_search</span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">Add Hero Background</span>
+                    </>
+                  )}
                 </div>
               )}
             </div>

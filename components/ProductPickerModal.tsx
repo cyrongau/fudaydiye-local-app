@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Product } from '../types';
 
 interface ProductPickerModalProps {
@@ -11,6 +12,12 @@ interface ProductPickerModalProps {
 const ProductPickerModal: React.FC<ProductPickerModalProps> = ({ isOpen, onClose, onSelect, products }) => {
     const [search, setSearch] = useState('');
     const [filtered, setFiltered] = useState<Product[]>(products);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
 
     useEffect(() => {
         if (!search) {
@@ -24,9 +31,9 @@ const ProductPickerModal: React.FC<ProductPickerModalProps> = ({ isOpen, onClose
         }
     }, [search, products]);
 
-    if (!isOpen) return null;
+    if (!isOpen || !mounted) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
@@ -80,7 +87,8 @@ const ProductPickerModal: React.FC<ProductPickerModalProps> = ({ isOpen, onClose
                     ))}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

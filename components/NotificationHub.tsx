@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { AppNotification } from '../types';
 
@@ -47,6 +47,19 @@ const NotificationHub: React.FC<NotificationHubProps> = ({ userId, isOpen, onClo
       } catch (err) { console.error(err); }
    };
 
+   const handleClearAll = async () => {
+      if (notifications.length === 0) return;
+      try {
+         const batch = writeBatch(db);
+         notifications.forEach(n => {
+            const ref = doc(db, "notifications", n.id);
+            batch.delete(ref);
+         });
+         await batch.commit();
+         setNotifications([]); // Optimistic update
+      } catch (err) { console.error("Clear failed", err); }
+   };
+
    if (!isOpen) return null;
 
    return (
@@ -80,8 +93,8 @@ const NotificationHub: React.FC<NotificationHubProps> = ({ userId, isOpen, onClo
                         className={`p-5 flex gap-4 transition-colors cursor-pointer group ${!notif.isRead ? 'bg-primary/5' : 'hover:bg-gray-50 dark:hover:bg-white/2'}`}
                      >
                         <div className={`size-10 rounded-xl shrink-0 flex items-center justify-center shadow-sm ${notif.type === 'FINANCE' ? 'bg-amber-100 text-amber-600' :
-                              notif.type === 'ORDER' ? 'bg-blue-100 text-blue-600' :
-                                 'bg-primary/20 text-primary'
+                           notif.type === 'ORDER' ? 'bg-blue-100 text-blue-600' :
+                              'bg-primary/20 text-primary'
                            }`}>
                            <span className="material-symbols-outlined text-[20px]">
                               {notif.type === 'FINANCE' ? 'wallet' : notif.type === 'ORDER' ? 'package_2' : 'hub'}
@@ -105,7 +118,7 @@ const NotificationHub: React.FC<NotificationHubProps> = ({ userId, isOpen, onClo
          </div>
 
          <footer className="p-4 bg-gray-50/50 dark:bg-white/2 border-t border-gray-50 dark:border-white/5">
-            <button className="w-full h-11 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-primary transition-colors">Clear All Events</button>
+            <button onClick={handleClearAll} className="w-full h-11 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-primary transition-colors">Clear All Events</button>
          </footer>
       </div>
    );

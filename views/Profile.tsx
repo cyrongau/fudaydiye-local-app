@@ -7,6 +7,7 @@ import { db } from '../lib/firebase';
 import { Transaction } from '../types';
 import { walletService } from '../src/lib/services/walletService';
 import { userService } from '../src/lib/services/userService';
+import ActivityFeed from '../components/ActivityFeed';
 
 interface ProfileProps {
   isAuthenticated: boolean;
@@ -253,6 +254,10 @@ const Profile: React.FC<ProfileProps> = ({ isAuthenticated }) => {
               </button>
             </div>
           </div>
+        </section>
+
+        <section>
+          <ActivityFeed />
         </section>
 
         <div className="space-y-6 mt-2 pb-10">

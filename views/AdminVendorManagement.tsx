@@ -10,7 +10,7 @@ import { AuditService } from '../lib/auditService';
 
 const AdminVendorManagement: React.FC = () => {
   const navigate = useNavigate();
-  const [roleFilter, setRoleFilter] = useState<'VENDOR' | 'RIDER' | 'CUSTOMER' | 'CLIENT'>('VENDOR');
+  const [roleFilter, setRoleFilter] = useState<'VENDOR' | 'RIDER' | 'CUSTOMER' | 'CLIENT' | 'ADMIN' | 'FUDAYDIYE_ADMIN'>('VENDOR');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'VERIFIED' | 'PENDING' | 'SUSPENDED'>('ALL');
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +70,8 @@ const AdminVendorManagement: React.FC = () => {
             await AuditService.logAction('ADMIN', 'Current Admin', 'SUSPEND', `Suspended User ${userId}`, 'HIGH', 'USER', userId);
             showAlert('Protocol Executed', 'User account suspended.', 'SUCCESS');
             setAlertConfig(prev => ({ ...prev, isOpen: false }));
+            // Refresh list
+            setRoleFilter(prev => prev);
           } catch (err) {
             console.error(err);
             setTimeout(() => showAlert('Execution Failed', 'Insufficient permissions.', 'DANGER'), 100);
@@ -82,14 +84,54 @@ const AdminVendorManagement: React.FC = () => {
         await userService.updateStatus(userId, { vendorStatus: 'ACTIVE', status: 'ACTIVE', isAccountLocked: false });
         showAlert('Access Restored', 'User account active.', 'SUCCESS');
         setAlertConfig(prev => ({ ...prev, isOpen: false }));
+        setRoleFilter(prev => prev);
       }, 'CONFIRM');
     } else if (action === 'DELETE') {
-      showConfirm('Delete User?', 'Irreversible action.', async () => {
-        await userService.updateStatus(userId, { vendorStatus: 'DELETED', status: 'DELETED', isAccountLocked: true });
-        showAlert('User Deleted', 'Account marked for deletion.', 'SUCCESS');
-        setAlertConfig(prev => ({ ...prev, isOpen: false }));
+      showConfirm('Permanently Delete User?', 'This action is IRREVERSIBLE. Data will be wiped.', async () => {
+        try {
+          await userService.deleteUser(userId);
+          showAlert('User Deleted', 'Account permanently removed.', 'SUCCESS');
+          setAlertConfig(prev => ({ ...prev, isOpen: false }));
+          // Remove from local state immediately to avoid re-fetch latency
+          setUsers(prev => prev.filter(u => u.id !== userId));
+        } catch (e) {
+          console.error(e);
+          showAlert('Delete Failed', 'Could not delete user. See console.', 'DANGER');
+        }
       }, 'DANGER');
     }
+  };
+
+  const handleResetPassword = (userId: string) => {
+    showConfirm('Reset Password?', 'Generate a password reset link for this user.', async () => {
+      try {
+        const result = await userService.resetPassword(userId);
+        if (result.link) {
+          // Show link in a custom alert or copy to clipboard
+          setAlertConfig({
+            isOpen: true,
+            title: 'Reset Link Generated',
+            message: 'Share this link with the user:',
+            type: 'INFO',
+            customSlot: (
+              <div className="w-full mt-4">
+                <div className="bg-gray-100 dark:bg-white/10 p-3 rounded-lg break-all text-[10px] font-mono select-all mb-4">
+                  {result.link}
+                </div>
+                <button onClick={() => { navigator.clipboard.writeText(result.link); setAlertConfig(prev => ({ ...prev, isOpen: false })); }} className="w-full h-10 bg-primary text-secondary font-black uppercase text-[10px] rounded-lg">
+                  Copy & Close
+                </button>
+              </div>
+            )
+          });
+        } else {
+          showAlert('Email Sent', 'Password reset email sent (if configured).', 'SUCCESS');
+        }
+      } catch (e) {
+        console.error(e);
+        showAlert('Action Failed', 'Could not reset password.', 'DANGER');
+      }
+    }, 'CONFIRM');
   };
 
   const handleToggleStream = async (userId: string, currentStatus: boolean) => {
@@ -105,6 +147,9 @@ const AdminVendorManagement: React.FC = () => {
   };
 
   const filteredUsers = users.filter(u => {
+    // 1. Hide System Super Admin
+    if (u.email === 'admin@fudaydiye.so' || u.role === 'SUPER_ADMIN') return false;
+
     if (statusFilter === 'ALL') return true;
     // Map status check to generic field or legacy vendorStatus
     const s = u.vendorStatus || u.status || 'ACTIVE';
@@ -122,7 +167,7 @@ const AdminVendorManagement: React.FC = () => {
         type={alertConfig.type}
         onConfirm={alertConfig.onConfirm}
         onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
-        confirmText={alertConfig.type === 'DANGER' ? 'Suspend Access' : 'Confirm'}
+        confirmText={alertConfig.type === 'DANGER' ? 'Confirm Action' : 'Confirm'}
         customSlot={alertConfig.customSlot}
       />
 
@@ -140,16 +185,16 @@ const AdminVendorManagement: React.FC = () => {
 
         {/* Role Filter Pills */}
         <div className="bg-white dark:bg-surface-dark p-2 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex gap-2 overflow-x-auto no-scrollbar">
-          {(['VENDOR', 'RIDER', 'CLIENT', 'CUSTOMER'] as const).map(role => (
+          {(['VENDOR', 'RIDER', 'CLIENT', 'CUSTOMER', 'ADMIN', 'FUDAYDIYE_ADMIN'] as const).map(role => (
             <button
               key={role}
               onClick={() => setRoleFilter(role)}
-              className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${roleFilter === role
+              className={`flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${roleFilter === role
                 ? 'bg-secondary text-primary shadow-md'
                 : 'bg-gray-50 dark:bg-white/5 text-gray-400 hover:bg-gray-100'
                 }`}
             >
-              {role}s
+              {role.replace('_', ' ')}s
             </button>
           ))}
         </div>
@@ -198,7 +243,7 @@ const AdminVendorManagement: React.FC = () => {
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{user.role} • {user.businessCategory || 'Standard'}</span>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{user.role} • {user.email}</span>
                       {user.role === 'VENDOR' && (
                         <>
                           <span className="size-1 bg-gray-200 rounded-full"></span>
@@ -224,16 +269,43 @@ const AdminVendorManagement: React.FC = () => {
                   </div>
                 )}
 
-                <div className="pt-2 flex gap-2">
+                <div className="pt-2 flex gap-2 overflow-x-auto no-scrollbar">
                   {(user.role === 'VENDOR' || user.role === 'RIDER') && (
                     <button
                       onClick={() => navigate(user.role === 'VENDOR' ? `/admin/vendor/${user.id}?view=kyc` : `/admin/rider/${user.id}`)}
-                      className="flex-1 h-12 bg-primary text-secondary rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                      className="min-w-[120px] max-w-[160px] h-12 bg-primary text-secondary rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[18px]">fact_check</span>
-                      {user.kycStatus === 'VERIFIED' ? 'Re-Verify KYC' : 'Authorize KYC'}
+                      {user.kycStatus === 'VERIFIED' ? 'Re-Verify' : 'Auth KYC'}
                     </button>
                   )}
+
+                  {user.role === 'CUSTOMER' && (
+                    <button
+                      onClick={() => {
+                        showConfirm('Upgrade to Vendor?', 'This will grant Vendor privileges.', async () => {
+                          try {
+                            await userService.setRole(user.id, 'VENDOR');
+                            showAlert('Upgrade Successful', 'User is now a Vendor.', 'SUCCESS');
+                            setAlertConfig(prev => ({ ...prev, isOpen: false }));
+                            setRoleFilter('VENDOR'); // Switch view to Vendors
+                          } catch (e) { console.error(e); showAlert('Failed', 'Upgrade failed.', 'DANGER'); }
+                        });
+                      }}
+                      className="min-w-[120px] max-w-[160px] h-12 bg-purple-100 text-purple-700 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">upgrade</span>
+                      Upgrade
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => handleResetPassword(user.id)}
+                    className="min-w-[120px] max-w-[160px] h-12 bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 hover:bg-gray-200 dark:hover:bg-white/10"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">lock_reset</span>
+                    Reset Pwd
+                  </button>
 
                   <button
                     onClick={() => {
@@ -256,17 +328,17 @@ const AdminVendorManagement: React.FC = () => {
                         handleUpdateStatus(user.id, 'SUSPEND');
                       }
                     }}
-                    className={`flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] active:scale-95 transition-all ${user.status === 'SUSPENDED' || user.vendorStatus === 'SUSPENDED'
+                    className={`flex-1 min-w-[120px] h-12 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] active:scale-95 transition-all ${user.status === 'SUSPENDED' || user.vendorStatus === 'SUSPENDED'
                       ? 'bg-secondary text-white shadow-lg border border-white/10'
                       : 'bg-gray-100 dark:bg-white/5 text-gray-500 hover:bg-red-50 hover:text-red-500'
                       }`}
                   >
-                    {user.status === 'SUSPENDED' || user.vendorStatus === 'SUSPENDED' ? 'Review' : 'Suspend Access'}
+                    {user.status === 'SUSPENDED' || user.vendorStatus === 'SUSPENDED' ? 'Review' : 'Suspend'}
                   </button>
 
                   <button
                     onClick={() => navigate(user.role === 'VENDOR' ? `/admin/vendor/${user.id}` : '#')}
-                    className="size-12 rounded-xl bg-secondary text-primary flex items-center justify-center active:scale-95 transition-all shadow-md group/btn"
+                    className="size-12 min-w-[48px] rounded-xl bg-secondary text-primary flex items-center justify-center active:scale-95 transition-all shadow-md group/btn"
                     title="Review Profile"
                   >
                     <span className="material-symbols-outlined group-hover:scale-110 transition-transform">person</span>

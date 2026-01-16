@@ -16,6 +16,9 @@ exports.UsersController = void 0;
 const common_1 = require("@nestjs/common");
 const users_service_1 = require("./users.service");
 const users_dto_1 = require("./dto/users.dto");
+const jwt_auth_guard_1 = require("../common/guards/jwt-auth.guard");
+const roles_guard_1 = require("../common/guards/roles.guard");
+const roles_decorator_1 = require("../common/decorators/roles.decorator");
 let UsersController = class UsersController {
     constructor(usersService) {
         this.usersService = usersService;
@@ -26,10 +29,19 @@ let UsersController = class UsersController {
     findAll(role) {
         return this.usersService.findAll(role);
     }
-    findOne(uid) {
+    findOne(uid, req) {
+        // Allow if owner or Admin
+        const user = req.user;
+        if (user.uid !== uid && !['ADMIN', 'FUDAYDIYE_ADMIN'].includes(user.role)) {
+            throw new common_1.ForbiddenException("You can only view your own profile.");
+        }
         return this.usersService.findOne(uid);
     }
-    update(uid, updateProfileDto) {
+    update(uid, updateProfileDto, req) {
+        const user = req.user;
+        if (user.uid !== uid && !['ADMIN', 'FUDAYDIYE_ADMIN'].includes(user.role)) {
+            throw new common_1.ForbiddenException("You can only update your own profile.");
+        }
         return this.usersService.update(uid, updateProfileDto);
     }
     setRole(uid, body) {
@@ -37,6 +49,19 @@ let UsersController = class UsersController {
     }
     updateStatus(uid, body) {
         return this.usersService.updateStatus(uid, body);
+    }
+    delete(uid) {
+        return this.usersService.deleteUser(uid);
+    }
+    resetPassword(uid) {
+        return this.usersService.resetPassword(uid);
+    }
+    uploadKyc(uid, body, req) {
+        const user = req.user;
+        if (user.uid !== uid) {
+            throw new common_1.ForbiddenException("You can only upload KYC for your own profile.");
+        }
+        return this.usersService.uploadKyc(uid, body);
     }
 };
 __decorate([
@@ -48,6 +73,8 @@ __decorate([
 ], UsersController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.ADMIN, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
     __param(0, (0, common_1.Query)('role')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -56,20 +83,24 @@ __decorate([
 __decorate([
     (0, common_1.Get)(':uid'),
     __param(0, (0, common_1.Param)('uid')),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Patch)(':uid'),
     __param(0, (0, common_1.Param)('uid')),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, users_dto_1.UpdateProfileDto]),
+    __metadata("design:paramtypes", [String, users_dto_1.UpdateProfileDto, Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "update", null);
 __decorate([
     (0, common_1.Post)(':uid/role'),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.ADMIN, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
     __param(0, (0, common_1.Param)('uid')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -78,14 +109,44 @@ __decorate([
 ], UsersController.prototype, "setRole", null);
 __decorate([
     (0, common_1.Patch)(':uid/status'),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.ADMIN, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
     __param(0, (0, common_1.Param)('uid')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, users_dto_1.UpdateUserStatusDto]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "updateStatus", null);
+__decorate([
+    (0, common_1.Delete)(':uid'),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.ADMIN, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
+    __param(0, (0, common_1.Param)('uid')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "delete", null);
+__decorate([
+    (0, common_1.Post)(':uid/reset-password'),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.ADMIN, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
+    __param(0, (0, common_1.Param)('uid')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "resetPassword", null);
+__decorate([
+    (0, common_1.Post)(':uid/kyc'),
+    __param(0, (0, common_1.Param)('uid')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "uploadKyc", null);
 UsersController = __decorate([
     (0, common_1.Controller)('users'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __metadata("design:paramtypes", [users_service_1.UsersService])
 ], UsersController);
 exports.UsersController = UsersController;

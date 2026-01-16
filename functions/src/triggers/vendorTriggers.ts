@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 
 const db = admin.firestore();
@@ -9,7 +9,7 @@ const db = admin.firestore();
  */
 export const onVendorSuspended = functions.firestore
     .document('users/{userId}')
-    .onUpdate(async (change, context) => {
+    .onUpdate(async (change, context: functions.EventContext) => {
         const before = change.before.data();
         const after = change.after.data();
         const vendorId = context.params.userId;

@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DocumentModal from '../components/DocumentModal';
 import { useAuth } from '../Providers';
-import { collection, query, where, onSnapshot, doc, updateDoc, increment, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, increment, runTransaction } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order } from '../types';
+import { api } from '../src/services/api';
 
 const CustomerOrders: React.FC = () => {
   const navigate = useNavigate();
@@ -22,26 +23,18 @@ const CustomerOrders: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    const q = query(
-      collection(db, "orders"),
-      where("customerId", "==", user.uid)
-    );
+    const fetchOrders = async () => {
+      try {
+        const res = await api.get('/orders');
+        setOrders(res.data);
+      } catch (err) {
+        console.error("Failed to fetch orders:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      fetched.sort((a, b) => {
-        const timeA = a.createdAt?.seconds || 0;
-        const timeB = b.createdAt?.seconds || 0;
-        return timeB - timeA;
-      });
-      setOrders(fetched);
-      setLoading(false);
-    }, (err) => {
-      console.error("Order Sync failure:", err);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchOrders();
   }, [user]);
 
   const handleRatingSubmit = async () => {
@@ -157,8 +150,9 @@ const CustomerOrders: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4 relative z-10">
                   <button
+                    disabled={!order.riderId || (order.status !== 'SHIPPED' && order.status !== 'DELIVERED')}
                     onClick={() => navigate(`/customer/track/${order.id}`)}
-                    className="h-14 bg-secondary text-primary font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all group/btn hover:shadow-primary-glow"
+                    className="h-14 bg-secondary text-primary font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all group/btn hover:shadow-primary-glow disabled:opacity-50 disabled:grayscale disabled:pointer-events-none"
                   >
                     <span className="material-symbols-outlined text-[20px] group-hover/btn:scale-110 transition-transform">my_location</span>
                     Live Track

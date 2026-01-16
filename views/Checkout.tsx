@@ -226,44 +226,29 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
             }
 
             try {
-               let targetUser = user;
+               const payload = {
+                  email: recipient.email,
+                  password: password,
+                  fullName: recipient.name,
+                  mobile: `${selectedCountryCode}${recipient.phone}`,
+                  anonUid: user?.isAnonymous ? user.uid : undefined
+               };
 
-               if (user?.isAnonymous) {
-                  // Link existing anon session
-                  const credential = EmailAuthProvider.credential(recipient.email, password);
-                  await linkWithCredential(user, credential);
-               } else if (!user) {
-                  // Create BRAND NEW user (Pure Guest -> Registered)
-                  const userCredential = await createUserWithEmailAndPassword(auth, recipient.email, password);
-                  targetUser = userCredential.user;
-               } else {
-                  // User already logged in and not anon? Should not be here usually, but safe to skip
-               }
+               const res = await api.post('/auth/register', payload);
 
-               if (targetUser) {
-                  await updateProfile(targetUser, { displayName: recipient.name });
-                  await sendEmailVerification(targetUser);
-
-                  await setDoc(doc(db, 'users', targetUser.uid), {
-                     uid: targetUser.uid,
-                     email: recipient.email,
-                     fullName: recipient.name,
-                     mobile: `${selectedCountryCode}${recipient.phone}`,
-                     role: 'CUSTOMER',
-                     createdAt: serverTimestamp()
-                  }, { merge: true });
-
-                  alert(`Account Created! Verify your email at ${recipient.email}.`);
+               if (res.data.success && res.data.token) {
+                  const { signInWithCustomToken } = await import('firebase/auth');
+                  await signInWithCustomToken(auth, res.data.token);
+                  alert(`Account Created! Welcome, ${recipient.name}.`);
                }
 
             } catch (err: any) {
                console.error("Account Creation Error:", err);
-               if (err.code === 'auth/email-already-in-use') {
-                  alert("Identity Conflict: Email already registered. Please sign in.");
-                  navigate('/login');
-                  return;
+               if (err.response?.data?.message) {
+                  alert("Registration Failed: " + err.response.data.message);
+               } else {
+                  alert("Account Creation Failed: " + err.message);
                }
-               alert("Account Creation Failed: " + err.message);
                return;
             }
          } else if (signupMethod === 'phone') {

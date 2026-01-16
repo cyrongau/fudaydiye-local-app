@@ -63,6 +63,15 @@ let FinanceController = class FinanceController {
     async triggerNightSettlement() {
         return this.settlementScheduler.settleNightShift();
     }
+    async authorizePayout(id, user) {
+        return this.financeService.authorizePayout(id, user.uid);
+    }
+    async getAllPayouts() {
+        return this.financeService.getAllPayouts();
+    }
+    async getAllTransactions() {
+        return this.financeService.getAllTransactions();
+    }
 };
 __decorate([
     (0, common_1.Get)('balance'),
@@ -103,6 +112,29 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], FinanceController.prototype, "triggerNightSettlement", null);
+__decorate([
+    (0, common_1.Post)('payout/:id/authorize'),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.ADMIN, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, user_decorator_1.User)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], FinanceController.prototype, "authorizePayout", null);
+__decorate([
+    (0, common_1.Get)('payouts'),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.ADMIN, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], FinanceController.prototype, "getAllPayouts", null);
+__decorate([
+    (0, common_1.Get)('transactions'),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.ADMIN, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], FinanceController.prototype, "getAllTransactions", null);
 FinanceController = __decorate([
     (0, common_1.Controller)('finance'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),

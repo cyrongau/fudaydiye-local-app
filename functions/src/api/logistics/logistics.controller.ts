@@ -63,4 +63,11 @@ export class LogisticsController {
         }
         return this.logisticsService.updateJobStatus(body.orderId, body.status, body.riderId);
     }
+
+    @Post('orders')
+    @Roles(UserRole.CLIENT, UserRole.ADMIN, UserRole.FUDAYDIYE_ADMIN) // Allow registered CLIENTs
+    createOrder(@Body() dto: any, @User() user: any) {
+        // Temporarily 'any' for DTO import, ideally CreateLogisticsOrderDto
+        return this.logisticsService.createLogisticsOrder(dto, user.uid, user.name || 'Client');
+    }
 }

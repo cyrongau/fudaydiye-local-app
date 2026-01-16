@@ -20,7 +20,7 @@ const ADMIN_ITEMS: SidebarItem[] = [
   { icon: 'bar_chart', path: '/admin/reports', label: 'Treasury' },
   { icon: 'local_shipping', path: '/admin/logistics', label: 'Fleet Control' },
   { icon: 'videocam', path: '/admin/live-moderation', label: 'Live Terminal' },
-  { icon: 'group', path: '/admin/users', label: 'Merchants' },
+  { icon: 'group', path: '/admin/users', label: 'Identity Nodes' },
   { icon: 'two_wheeler', path: '/admin/riders', label: 'Riders' },
   { icon: 'article', path: '/admin/cms', label: 'CMS Terminal' },
   { icon: 'shopping_cart_off', path: '/admin/abandonment', label: 'Lost Leads' },

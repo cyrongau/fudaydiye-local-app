@@ -110,4 +110,83 @@ export class FinanceService {
             throw error;
         }
     }
+    // Admin Authorize Payout
+    async authorizePayout(payoutId: string, adminId: string) {
+        const payoutRef = this.db.collection('payouts').doc(payoutId);
+        const ledgerRef = this.db.collection('transactions').doc();
+
+        try {
+            await this.db.runTransaction(async (t) => {
+                const payoutDoc = await t.get(payoutRef);
+                if (!payoutDoc.exists) throw new BadRequestException("Payout request not found");
+                const payoutData = payoutDoc.data()!;
+
+                if (payoutData.status !== 'PENDING') {
+                    throw new BadRequestException("Payout is not pending.");
+                }
+
+                // 1. Update payout status
+                t.update(payoutRef, {
+                    status: 'SETTLED',
+                    authorizedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    authorizedBy: adminId
+                });
+
+                // 2. Funds were already locked (deducted from balance, moved to pendingPayouts) during Request.
+                // Now we just confirm it. 
+                // Wait, if we want to reflect "Settled" in wallet, we might decrement pendingPayouts?
+                // Logic check: requestPayout increments pendingPayouts, decrements balance.
+                // So funds are "gone" from usable. 
+                // So we just need to decrement pendingPayouts if we want to clear that liability?
+                // Or keep it for history. Usually clear pending.
+                const vendorRef = this.db.collection('wallets').doc(payoutData.userId);
+                t.update(vendorRef, {
+                    pendingPayouts: admin.firestore.FieldValue.increment(-payoutData.amount)
+                });
+
+                // 3. Record Payout Transaction (Ledger)
+                t.set(ledgerRef, {
+                    userId: payoutData.userId,
+                    type: TransactionType.WITHDRAWAL, // Or PAYOUT_CONFIRMED
+                    amount: payoutData.amount,
+                    status: TransactionStatus.SETTLED,
+                    referenceId: payoutId,
+                    description: `Authorized Payout to ${payoutData.method}`,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                // 4. Notify Vendor
+                const notifRef = this.db.collection("notifications").doc();
+                t.set(notifRef, {
+                    userId: payoutData.userId,
+                    title: "Payout Authorized",
+                    message: `System node has authorized your $${payoutData.amount} withdrawal via ${payoutData.method}.`,
+                    type: 'FINANCE',
+                    isRead: false,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            });
+
+            return { success: true };
+        } catch (error) {
+            this.logger.error(`Payout Authorization Failed: ${error}`);
+            throw error;
+        }
+    }
+
+    async getAllPayouts(limit: number = 50) {
+        const snapshot = await this.db.collection('payouts')
+            .orderBy('createdAt', 'desc')
+            .limit(limit)
+            .get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
+    async getAllTransactions(limit: number = 50) {
+        const snapshot = await this.db.collection('transactions')
+            .orderBy('createdAt', 'desc')
+            .limit(limit)
+            .get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
 }

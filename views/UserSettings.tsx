@@ -1,11 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../lib/firebase';
+import { storage } from '../lib/firebase';
 import { useAuth } from '../Providers';
 import { KYCDocument } from '../types';
+import { userService } from '../src/services/userService';
 
 const UserSettings: React.FC = () => {
   const navigate = useNavigate();
@@ -63,11 +63,11 @@ const UserSettings: React.FC = () => {
       const snapshot = await uploadBytes(storageRef, file);
       const downloadUrl = await getDownloadURL(snapshot.ref);
 
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, { [field]: downloadUrl });
+      await userService.update(user.uid, { [field]: downloadUrl });
       setProfileData(prev => ({ ...prev, [field]: downloadUrl }));
       alert(`${field === 'avatar' ? 'Identity' : 'Brand logo'} synchronized.`);
     } catch (err) {
+      console.error(err);
       alert("Asset sync failure.");
     } finally {
       setIsSaving(false);
@@ -77,6 +77,10 @@ const UserSettings: React.FC = () => {
   const handleKycUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && activeKycType && user) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("File too large. Maximum size is 5MB.");
+        return;
+      }
       setIsSaving(true);
       setUploadProgress(10);
       try {
@@ -99,15 +103,10 @@ const UserSettings: React.FC = () => {
           fileType: fileType,
           storagePath: snapshot.ref.fullPath,
           status: 'PENDING',
-          uploadedAt: serverTimestamp()
+          uploadedAt: null // Backend handles this
         };
 
-        const userRef = doc(db, "users", user.uid);
-        await updateDoc(userRef, {
-          kycDocuments: arrayUnion(newDoc),
-          kycStatus: 'PENDING',
-          updatedAt: serverTimestamp()
-        });
+        await userService.uploadKyc(user.uid, newDoc);
 
         setUploadProgress(100);
         alert(`${activeKycType.replace('_', ' ')} artifact authorized.`);
@@ -126,15 +125,14 @@ const UserSettings: React.FC = () => {
     if (!user) return;
     setIsSaving(true);
     try {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
+      await userService.update(user.uid, {
         fullName: profileData.name,
         email: profileData.email,
-        mobile: profileData.phone,
-        updatedAt: serverTimestamp()
+        mobile: profileData.phone
       });
       setIsEditingProfile(false);
     } catch (err) {
+      console.error(err);
       alert("Sync failed.");
     } finally {
       setIsSaving(false);

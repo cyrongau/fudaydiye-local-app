@@ -8,7 +8,10 @@ import { RiderService } from '../src/lib/services/riderService';
 
 declare const google: any;
 
+import { useAuth } from '../Providers';
+
 const RiderPickupConfirmation: React.FC = () => {
+  const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
@@ -25,47 +28,23 @@ const RiderPickupConfirmation: React.FC = () => {
 
   useEffect(() => {
     if (!id) return;
-    const unsub = onSnapshot(doc(db, "orders", id), async (snap) => {
+    const unsub = onSnapshot(doc(db, "orders", id), (snap) => {
       if (snap.exists()) {
         const data = { id: snap.id, ...snap.data() } as Order;
         setOrder(data);
 
-        if (data && !vendorLoc) {
-          const initialChecks: Record<string, boolean> = {};
-          data.items.forEach((item, idx) => initialChecks[`item-${idx}`] = false);
-          setItemsVerified(initialChecks);
-
-          const vendorSnap = await getDoc(doc(db, "users", data.vendorId));
-          if (vendorSnap.exists()) {
-            const vData = vendorSnap.data() as UserProfile;
-            if (vData.lat && vData.lng) {
-              setVendorLoc({ lat: vData.lat, lng: vData.lng });
-            }
+        // Initialize items check on first load
+        setItemsVerified(prev => {
+          if (Object.keys(prev).length === 0 && data.items) {
+            const initialChecks: Record<string, boolean> = {};
+            data.items.forEach((_, idx) => initialChecks[`item-${idx}`] = false);
+            return initialChecks;
           }
-        }
-
-        if (data.currentLocation && googleMap.current) {
-          const pos = { lat: data.currentLocation.lat, lng: data.currentLocation.lng };
-          if (!riderMarker.current) {
-            riderMarker.current = new google.maps.Marker({
-              position: pos,
-              map: googleMap.current,
-              icon: {
-                path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                scale: 5,
-                fillColor: "#06DC7F",
-                fillOpacity: 1,
-                strokeWeight: 1,
-                strokeColor: "#ffffff",
-              }
-            });
-          } else {
-            riderMarker.current.setPosition(pos);
-          }
-        }
+          return prev;
+        });
       } else {
         console.error("Order not found:", id);
-        setLoading(false); // Stop loading even if not found
+        setLoading(false);
       }
       setLoading(false);
     }, (error) => {
@@ -73,7 +52,50 @@ const RiderPickupConfirmation: React.FC = () => {
       setLoading(false);
     });
     return () => unsub();
-  }, [id, vendorLoc]);
+  }, [id]);
+
+  // 3. Separate Effect for fetching Vendor Location
+  useEffect(() => {
+    const fetchVendorLoc = async () => {
+      if (!order?.vendorId || vendorLoc) return; // Skip if already have loc
+
+      try {
+        const vendorSnap = await getDoc(doc(db, "users", order.vendorId));
+        if (vendorSnap.exists()) {
+          const vData = vendorSnap.data() as UserProfile;
+          if (vData.lat && vData.lng) {
+            setVendorLoc({ lat: vData.lat, lng: vData.lng });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch vendor location", err);
+      }
+    };
+    fetchVendorLoc();
+  }, [order?.vendorId]);
+
+  // 4. Separate Effect for Rider Marker (Map Sync)
+  useEffect(() => {
+    if (!order?.currentLocation || !googleMap.current || !(window as any).google) return;
+
+    const pos = { lat: order.currentLocation.lat, lng: order.currentLocation.lng };
+    if (!riderMarker.current) {
+      riderMarker.current = new google.maps.Marker({
+        position: pos,
+        map: googleMap.current,
+        icon: {
+          path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+          scale: 5,
+          fillColor: "#06DC7F",
+          fillOpacity: 1,
+          strokeWeight: 1,
+          strokeColor: "#ffffff",
+        }
+      });
+    } else {
+      riderMarker.current.setPosition(pos);
+    }
+  }, [order?.currentLocation, googleMap.current]);
 
   useEffect(() => {
     const loadMapScript = async () => {
@@ -126,13 +148,34 @@ const RiderPickupConfirmation: React.FC = () => {
     } catch (e) { console.error("Notification clear failed", e); }
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activePhotoKey, setActivePhotoKey] = useState<string | null>(null);
+
   const toggleItem = (key: string) => {
     setItemsVerified(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleCapturePhoto = (key: string) => {
-    const mockPhoto = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=800";
-    setItemPhotos(prev => ({ ...prev, [key]: mockPhoto }));
+  const handleCaptureClick = (key: string) => {
+    setActivePhotoKey(key);
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && activePhotoKey) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (ev.target?.result) {
+          setItemPhotos(prev => ({ ...prev, [activePhotoKey]: ev.target!.result as string }));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    // Reset
+    setActivePhotoKey(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const allItemsChecked = order?.items.every((_, i) => itemsVerified[`item-${i}`] && itemPhotos[`item-${i}`]);
@@ -142,7 +185,8 @@ const RiderPickupConfirmation: React.FC = () => {
     setIsConfirming(true);
     try {
       // Use Backend Service
-      await RiderService.pickupJob(order.id, order.riderId!);
+      if (!user) return;
+      await RiderService.pickupJob(order.id, user.uid);
 
       await clearAssociatedNotifications();
 
@@ -180,6 +224,14 @@ const RiderPickupConfirmation: React.FC = () => {
       </header>
 
       <main className="p-8 md:p-16 flex flex-col gap-12 overflow-y-auto pb-48 no-scrollbar animate-in fade-in duration-700 max-w-6xl mx-auto w-full">
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileChange}
+        />
         <section className="relative h-[320px] rounded-[48px] overflow-hidden border border-gray-100 dark:border-white/10 shadow-2xl bg-off-white dark:bg-zinc-900">
           {!mapLoaded && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
@@ -245,7 +297,7 @@ const RiderPickupConfirmation: React.FC = () => {
                     </div>
 
                     <button
-                      onClick={() => handleCapturePhoto(key)}
+                      onClick={() => handleCaptureClick(key)}
                       className={`size-12 rounded-xl flex items-center justify-center transition-all ${hasItemPhoto ? 'bg-secondary text-primary' : 'bg-gray-50 dark:bg-white/10 text-gray-400 border border-gray-100'
                         }`}
                     >
@@ -256,7 +308,7 @@ const RiderPickupConfirmation: React.FC = () => {
                   {hasItemPhoto && (
                     <div className="relative aspect-video rounded-3xl overflow-hidden border-2 border-primary/20 animate-in zoom-in duration-300">
                       <img src={itemPhotos[key]} className="w-full h-full object-cover" alt="Verification" />
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer" onClick={() => handleCapturePhoto(key)}>
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer" onClick={() => handleCaptureClick(key)}>
                         <span className="text-[9px] font-black uppercase text-white bg-black/40 px-3 py-1.5 rounded-lg">Retake Proof</span>
                       </div>
                     </div>

@@ -245,8 +245,13 @@ const LiveStream: React.FC = () => {
     if (!id || mode !== 'seller' || !window.confirm("Terminate this broadcast node? This action is permanent.")) return;
     setIsEnding(true);
     try {
-      await updateDoc(doc(db, "live_sessions", id), { status: 'ENDED', endedAt: serverTimestamp() });
-    } catch (e) { setIsEnding(false); }
+      // Use secure service which calls API
+      const { liveStreamService } = await import('../src/lib/services/liveStreamService');
+      await liveStreamService.updateSessionStatus(id, 'ENDED');
+    } catch (e) {
+      setIsEnding(false);
+      console.error("End session failure", e);
+    }
   };
 
   const handleSendMessage = async () => {

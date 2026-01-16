@@ -61,6 +61,10 @@ let LogisticsController = class LogisticsController {
         }
         return this.logisticsService.updateJobStatus(body.orderId, body.status, body.riderId);
     }
+    createOrder(dto, user) {
+        // Temporarily 'any' for DTO import, ideally CreateLogisticsOrderDto
+        return this.logisticsService.createLogisticsOrder(dto, user.uid, user.name || 'Client');
+    }
 };
 __decorate([
     (0, common_1.Post)('rider/location'),
@@ -109,6 +113,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], LogisticsController.prototype, "updateJobStatus", null);
+__decorate([
+    (0, common_1.Post)('orders'),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.CLIENT, users_dto_1.UserRole.ADMIN, users_dto_1.UserRole.FUDAYDIYE_ADMIN) // Allow registered CLIENTs
+    ,
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, user_decorator_1.User)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], LogisticsController.prototype, "createOrder", null);
 LogisticsController = __decorate([
     (0, common_1.Controller)('logistics'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),

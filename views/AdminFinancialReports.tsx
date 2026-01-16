@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, query, orderBy, getDocs, doc, updateDoc, increment, runTransaction, serverTimestamp, addDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { PayoutRequest, Transaction } from '../types';
+import { api } from '../src/services/api';
 
 const AdminFinancialReports: React.FC = () => {
   const navigate = useNavigate();
@@ -15,24 +16,31 @@ const AdminFinancialReports: React.FC = () => {
   const [exchangeRate, setExchangeRate] = useState<number>(8500);
   const [rateLoading, setRateLoading] = useState(false);
 
+  const [stats, setStats] = useState({ gmv: 0, revenue: 0, pendingPayouts: 0, totalOrders: 0 });
+
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Fetch Aggregated Stats
+      const statsRes = await api.get('/admin/stats');
+      if (statsRes.data) setStats(statsRes.data);
+
       // Sync Payout Queue
-      const qPay = query(collection(db, "payouts"), orderBy("createdAt", "desc"));
-      const snapPay = await getDocs(qPay);
-      setPayouts(snapPay.docs.map(d => ({ id: d.id, ...d.data() } as PayoutRequest)));
+      const payRes = await api.get('/finance/payouts');
+      setPayouts(payRes.data);
 
       // Sync Global Ledger
-      const qTx = query(collection(db, "transactions"), orderBy("createdAt", "desc"));
-      const snapTx = await getDocs(qTx);
-      setTransactions(snapTx.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
+      const txRes = await api.get('/finance/transactions');
+      setTransactions(txRes.data);
 
-      // Sync Exchange Rate
-      const snapRate = await getDocs(query(collection(db, "settings")));
-      const rateDoc = snapRate.docs.find(d => d.id === 'exchange_rates');
-      if (rateDoc && rateDoc.exists()) {
-        setExchangeRate(rateDoc.data().rate || 8500);
+      // Sync Exchange Rate (From Config)
+      const snapConfig = await getDocs(query(collection(db, "system_config")));
+      const globalConfig = snapConfig.docs.find(d => d.id === 'global');
+      if (globalConfig && globalConfig.exists()) {
+        const data = globalConfig.data();
+        if (data.settings?.exchangeRate) {
+          setExchangeRate(data.settings.exchangeRate);
+        }
       }
     } catch (err) {
       console.error("Financial Reports Data Load Error:", err);
@@ -48,11 +56,9 @@ const AdminFinancialReports: React.FC = () => {
   const handleUpdateRate = async () => {
     setRateLoading(true);
     try {
-      await setDoc(doc(db, "settings", "exchange_rates"), {
-        rate: Number(exchangeRate),
-        updatedAt: serverTimestamp(),
-        updatedBy: 'ADMIN' // In real app, put actual admin ID here
-      }, { merge: true });
+      await api.patch('/admin/config', {
+        settings: { exchangeRate: Number(exchangeRate) }
+      });
       alert("Exchange Rate Updated Successfully.");
     } catch (err) {
       console.error("Error updating rate:", err);
@@ -66,50 +72,12 @@ const AdminFinancialReports: React.FC = () => {
     if (!window.confirm(`Authorize settlement of $${payout.amount} to ${payout.vendorName}?`)) return;
 
     try {
-      await runTransaction(db, async (transaction) => {
-        const vendorRef = doc(db, "users", payout.vendorId);
-        const payoutRef = doc(db, "payouts", payout.id);
-        const ledgerRef = doc(collection(db, "transactions"));
-
-        // 1. Update payout status
-        transaction.update(payoutRef, {
-          status: 'SETTLED',
-          authorizedAt: serverTimestamp()
-        });
-
-        // 2. Deduct from liquid wallet
-        transaction.update(vendorRef, {
-          walletBalance: increment(-payout.amount)
-        });
-
-        // 3. Record Payout Transaction
-        transaction.set(ledgerRef, {
-          userId: payout.vendorId,
-          type: 'PAYOUT',
-          amount: payout.amount,
-          status: 'COMPLETED',
-          referenceId: payout.id,
-          description: `Authorized Payout to ${payout.method}`,
-          createdAt: serverTimestamp()
-        });
-      });
-
-      // Notify Vendor
-      // Fix: addDoc is now correctly imported
-      await addDoc(collection(db, "notifications"), {
-        userId: payout.vendorId,
-        title: "Payout Authorized",
-        message: `System node has authorized your $${payout.amount} withdrawal. Funds arriving via ${payout.method}.`,
-        type: 'FINANCE',
-        isRead: false,
-        createdAt: serverTimestamp()
-      });
-
+      await api.post(`/finance/payout/${payout.id}/authorize`, {});
       alert("Node Settlement Successful.");
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Treasury Sync Failure.");
+      alert(`Treasury Sync Failure: ${err.message || 'Unknown'}`);
     }
   };
 
@@ -130,11 +98,11 @@ const AdminFinancialReports: React.FC = () => {
           <div className="absolute top-0 right-0 w-48 h-48 bg-primary/20 blur-[80px] rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-primary/30 transition-colors duration-700"></div>
           <div className="relative z-10 flex flex-col gap-1">
             <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3">Managed Platform GMV</span>
-            <h2 className="text-6xl font-black tracking-tighter leading-none">$0<span className="text-primary text-2xl font-bold">.00</span></h2>
+            <h2 className="text-6xl font-black tracking-tighter leading-none">${stats.gmv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
             <div className="mt-8 flex items-center gap-3">
               <div className="flex-1 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
                 <p className="text-[8px] font-black uppercase text-primary mb-1">Escrow Queue</p>
-                <p className="text-lg font-black">${payouts.filter(p => p.status === 'PENDING').reduce((sum, p) => sum + p.amount, 0).toFixed(2)}</p>
+                <p className="text-lg font-black">${stats.pendingPayouts.toFixed(2)}</p>
               </div>
               <button className="size-14 bg-primary text-secondary rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-all">
                 <span className="material-symbols-outlined font-black">analytics</span>

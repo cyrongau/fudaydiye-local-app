@@ -18,7 +18,7 @@ export class InventoryController {
     @UsePipes(new ValidationPipe({ transform: true }))
     async adjustStock(@Body() adjustStockDto: AdjustStockDto, @User() user: any) {
         // TODO: Verify Vendor owns the product if user.role === VENDOR
-        return this.inventoryService.adjustStock(adjustStockDto, user.uid);
+        return this.inventoryService.adjustStock(adjustStockDto, user);
     }
 
     @Get(':productId/history')

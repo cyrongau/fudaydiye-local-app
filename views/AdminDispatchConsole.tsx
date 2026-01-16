@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { api } from '../src/lib/api';
+import { api } from '../src/services/api';
 import DispatchMap from '../components/DispatchMap';
 import { toast } from 'sonner';
 

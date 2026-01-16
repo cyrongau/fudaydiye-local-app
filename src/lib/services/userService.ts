@@ -1,4 +1,4 @@
-import { api } from '../api';
+import { api } from '../../services/api';
 import { UserProfileInput } from '../schemas/user';
 
 export const userService = {
@@ -24,6 +24,16 @@ export const userService = {
 
     async updateStatus(uid: string, statusData: any) {
         const response = await api.patch(`/users/${uid}/status`, statusData);
+        return response.data;
+    },
+
+    async deleteUser(uid: string) {
+        const response = await api.delete(`/users/${uid}`);
+        return response.data;
+    },
+
+    async resetPassword(uid: string) {
+        const response = await api.post(`/users/${uid}/reset-password`);
         return response.data;
     }
 };

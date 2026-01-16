@@ -8,30 +8,21 @@ const LiveHostProfile: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'REPLAYS' | 'SHOP' | 'UPCOMING'>('REPLAYS');
   const [isFollowing, setIsFollowing] = useState(false);
 
+
   const [host, setHost] = useState<any>(null);
+  const [replays, setReplays] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Replays and Products remain mock for now as they require distinct collections not yet populated
-  const replays = [
-    { id: '1', title: "iPhone 15 Pro Max Deep Dive", date: "2 days ago", views: "4.2k", img: "https://picsum.photos/id/1/400/250" },
-    { id: '2', title: "Samsung Galaxy Unboxing", date: "1 week ago", views: "8.1k", img: "https://picsum.photos/id/2/400/250" },
-    { id: '3', title: "Smart Watch Face-off", date: "2 weeks ago", views: "3.5k", img: "https://picsum.photos/id/3/400/250" },
-  ];
-
-  const products = [
-    { id: '101', name: "Fast Charger 65W", price: "$25.00", img: "https://picsum.photos/id/4/200/200" },
-    { id: '102', name: "Wireless Headphones", price: "$45.00", img: "https://picsum.photos/id/5/200/200" },
-    { id: '103', name: "Protective Glass 5D", price: "$8.00", img: "https://picsum.photos/id/6/200/200" },
-  ];
 
   React.useEffect(() => {
     if (!id) return;
-    const fetchHost = async () => {
+    const fetchData = async () => {
       try {
-        // Dynamic import to avoid top-level issues if not used elsewhere, or just rely on existing imports if any
         const { doc, getDoc } = await import('firebase/firestore');
         const { db } = await import('../lib/firebase');
+        const { api } = await import('../src/services/api');
 
+        // 1. Fetch Host Profile
         const docSnap = await getDoc(doc(db, "users", id));
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -47,13 +38,26 @@ const LiveHostProfile: React.FC = () => {
             isVerified: data.isVerified || false
           });
         }
+
+        // 2. Fetch Real Replays
+        try {
+          const replaysRes = await api.get(`/live/${id}/replays`);
+          setReplays(replaysRes.data);
+        } catch (e) { console.warn("Replay fetch error", e); }
+
+        // 3. Fetch Real Products
+        try {
+          const prodsRes = await api.get(`/live/${id}/products`);
+          setProducts(prodsRes.data);
+        } catch (e) { console.warn("Product fetch error", e); }
+
       } catch (err) {
         console.error("Failed to load host", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchHost();
+    fetchData();
   }, [id]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark"><div className="animate-spin size-8 border-4 border-primary rounded-full border-t-transparent"></div></div>;
@@ -104,8 +108,8 @@ const LiveHostProfile: React.FC = () => {
             <button
               onClick={() => setIsFollowing(!isFollowing)}
               className={`h-14 px-10 rounded-[22px] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95 ${isFollowing
-                  ? 'bg-gray-100 dark:bg-white/5 text-gray-500 border border-gray-200 dark:border-white/10'
-                  : 'bg-primary text-secondary'
+                ? 'bg-gray-100 dark:bg-white/5 text-gray-500 border border-gray-200 dark:border-white/10'
+                : 'bg-primary text-secondary'
                 }`}
             >
               {isFollowing ? 'Following' : 'Follow'}
@@ -130,8 +134,8 @@ const LiveHostProfile: React.FC = () => {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab
-                  ? 'bg-white dark:bg-surface-dark text-secondary dark:text-primary shadow-sm'
-                  : 'text-gray-400'
+                ? 'bg-white dark:bg-surface-dark text-secondary dark:text-primary shadow-sm'
+                : 'text-gray-400'
                 }`}
             >
               {tab}

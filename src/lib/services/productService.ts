@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { Product, CategoryNode } from '../../../types';
-import { api } from '../api';
+import { api } from '../../services/api';
 import { ProductSchema } from '../schemas/product';
 
 export class ProductService {

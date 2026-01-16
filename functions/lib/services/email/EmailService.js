@@ -2,43 +2,47 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EmailService = void 0;
 const nodemailer = require("nodemailer");
-const functions = require("firebase-functions");
+const admin = require("firebase-admin");
 class EmailService {
     constructor() {
         this.channel = 'EMAIL';
-        this.transporter = null;
-        this.fromEmail = "noreply@fddy-commerce.com";
-        const config = functions.config().email;
-        if (config && config.smtp_host) {
-            this.transporter = nodemailer.createTransport({
-                host: config.smtp_host,
-                port: parseInt(config.smtp_port) || 587,
-                secure: false,
-                auth: {
-                    user: config.smtp_user,
-                    pass: config.smtp_pass,
-                },
-            });
-            this.fromEmail = config.from_email || this.fromEmail;
+    }
+    async getConfig() {
+        var _a, _b, _c, _d, _e;
+        try {
+            const doc = await admin.firestore().collection('system_config').doc('global').get();
+            if (doc.exists && ((_c = (_b = (_a = doc.data()) === null || _a === void 0 ? void 0 : _a.integrations) === null || _b === void 0 ? void 0 : _b.smtp) === null || _c === void 0 ? void 0 : _c.active)) {
+                return (_e = (_d = doc.data()) === null || _d === void 0 ? void 0 : _d.integrations) === null || _e === void 0 ? void 0 : _e.smtp;
+            }
+            return null;
         }
-        else {
-            console.log("EmailService: No SMTP config found. Running in MOCK mode.");
+        catch (e) {
+            console.error("EmailService: Config Fetch Error", e);
+            return null;
         }
     }
     async send(payload) {
-        console.log(`[EmailService] Attempting to send to ${payload.to}`);
-        if (!this.transporter) {
-            console.log(`[EmailService-MOCK] Subject: ${payload.subject}`);
-            console.log(`[EmailService-MOCK] Body: ${payload.body}`);
+        const config = await this.getConfig();
+        if (!config) {
+            console.log(`[EmailService-MOCK] (No Active SMTP Config) Subject: ${payload.subject}`);
             return true;
         }
         try {
-            await this.transporter.sendMail({
-                from: this.fromEmail,
+            const transporter = nodemailer.createTransport({
+                host: config.host,
+                port: parseInt(config.port) || 587,
+                secure: parseInt(config.port) === 465,
+                auth: {
+                    user: config.user,
+                    pass: config.pass,
+                },
+            });
+            await transporter.sendMail({
+                from: config.fromEmail || "noreply@fudaydiye.so",
                 to: payload.to,
                 subject: payload.subject || "Notification",
                 text: payload.body,
-                html: payload.body // Assuming body is HTML safe or simple text
+                html: payload.body // Assuming HTML
             });
             console.log(`[EmailService] Sent successfully to ${payload.to}`);
             return true;

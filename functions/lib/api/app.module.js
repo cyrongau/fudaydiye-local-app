@@ -15,18 +15,36 @@ const logistics_module_1 = require("./logistics/logistics.module");
 const finance_module_1 = require("./finance/finance.module");
 const users_module_1 = require("./users/users.module");
 const inventory_module_1 = require("./inventory/inventory.module");
+const live_module_1 = require("./live/live.module");
+const notifications_module_1 = require("./notifications/notifications.module");
+const media_module_1 = require("./media/media.module");
+const search_module_1 = require("./search/search.module");
+const events_module_1 = require("./events/events.module");
+const event_emitter_1 = require("@nestjs/event-emitter");
+const admin_module_1 = require("./admin/admin.module");
+const payments_module_1 = require("./payments/payments.module");
+const analytics_module_1 = require("./analytics/analytics.module");
 let AppModule = class AppModule {
 };
 AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            event_emitter_1.EventEmitterModule.forRoot(),
             orders_module_1.OrdersModule,
             products_module_1.ProductsModule,
             logistics_module_1.LogisticsModule,
             finance_module_1.FinanceModule,
             auth_module_1.AuthModule,
             users_module_1.UsersModule,
-            inventory_module_1.InventoryModule
+            inventory_module_1.InventoryModule,
+            live_module_1.LiveModule,
+            notifications_module_1.NotificationsModule,
+            media_module_1.MediaModule,
+            search_module_1.SearchModule,
+            events_module_1.EventsModule,
+            admin_module_1.AdminModule,
+            payments_module_1.PaymentsModule,
+            analytics_module_1.AnalyticsModule
         ],
         controllers: [],
         providers: [],

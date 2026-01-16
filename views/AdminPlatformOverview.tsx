@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getCountFromServer, onSnapshot, orderBy, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { api } from '../src/services/api';
 
 const AdminPlatformOverview: React.FC = () => {
   const navigate = useNavigate();
@@ -19,25 +18,16 @@ const AdminPlatformOverview: React.FC = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // 1. User Counts
-        const shoppersSnap = await getCountFromServer(query(collection(db, "users"), where("role", "==", "CUSTOMER")));
-        const vendorsSnap = await getCountFromServer(query(collection(db, "users"), where("role", "==", "VENDOR")));
-        const ridersSnap = await getCountFromServer(query(collection(db, "users"), where("role", "==", "RIDER")));
-
-        // 2. GMV (Simplified: Sum of successful transactions or orders - implemented as simple real-time listener on transactions for now or 0)
-        // Ideally this should be a cloud function aggregation, but for "fresh" system 0 is fine.
-        // basic check if transactions exist
-        let totalGmv = 0;
-        // Let's rely on a basic "transactions" listener for recent sum or just 0 if empty
-        // For this task, we set to 0 initially as requested "zero balances where no cash recorded"
+        const res = await api.get('/analytics/dashboard');
+        const data = res.data;
 
         setStats({
-          gmv: totalGmv,
-          growth: 0, // Fresh system 0%
-          retention: 0, // Fresh system 0%
-          shoppers: shoppersSnap.data().count,
-          vendors: vendorsSnap.data().count,
-          riders: ridersSnap.data().count
+          gmv: data.totalRevenue || 0,
+          growth: 0, // Pending implementation
+          retention: 0, // Pending implementation
+          shoppers: data.totalCustomers || 0,
+          vendors: data.totalVendors || 0,
+          riders: data.totalRiders || 0
         });
 
       } catch (err) {

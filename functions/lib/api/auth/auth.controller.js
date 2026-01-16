@@ -26,6 +26,9 @@ let AuthController = class AuthController {
     verifyOtp(verifyOtpDto) {
         return this.authService.verifyOtp(verifyOtpDto);
     }
+    register(dto) {
+        return this.authService.registerUser(dto);
+    }
 };
 __decorate([
     (0, common_1.Post)('otp/request'),
@@ -41,6 +44,13 @@ __decorate([
     __metadata("design:paramtypes", [auth_dto_1.VerifyOtpDto]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "verifyOtp", null);
+__decorate([
+    (0, common_1.Post)('register'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [auth_dto_1.RegisterUserDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "register", null);
 AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService])

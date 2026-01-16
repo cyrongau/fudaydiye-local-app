@@ -4,26 +4,27 @@ exports.handleNestRequest = void 0;
 const core_1 = require("@nestjs/core");
 const platform_express_1 = require("@nestjs/platform-express");
 const app_module_1 = require("./app.module");
-const express = require("express");
-const server = express();
-let isInitialized = false;
-const initPromise = core_1.NestFactory.create(app_module_1.AppModule, new platform_express_1.ExpressAdapter(server))
-    .then(app => {
-    app.enableCors({ origin: true });
-    return app.init();
-})
-    .then(() => {
-    isInitialized = true;
-    console.log('NestJS App Initialized');
-})
-    .catch(err => {
-    console.error('NestJS Init Failed', err);
-});
-const handleNestRequest = async (req, res) => {
-    if (!isInitialized) {
-        await initPromise;
+let cachedServer;
+const bootstrapServer = async () => {
+    if (!cachedServer) {
+        const app = await core_1.NestFactory.create(app_module_1.AppModule, new platform_express_1.ExpressAdapter());
+        app.enableCors({ origin: true });
+        await app.init();
+        cachedServer = app.getHttpAdapter().getInstance();
+        console.log('NestJS App Initialized (Self-Hosted Mode)');
     }
-    server(req, res);
+    return cachedServer;
+};
+const handleNestRequest = async (req, res) => {
+    try {
+        const server = await bootstrapServer();
+        console.log('Incoming Request:', req.method, req.url);
+        server(req, res);
+    }
+    catch (error) {
+        console.error('NestJS Bootstrap Error:', error);
+        res.status(500).send('Backend Initialization Failed');
+    }
 };
 exports.handleNestRequest = handleNestRequest;
 //# sourceMappingURL=bootstrap.js.map

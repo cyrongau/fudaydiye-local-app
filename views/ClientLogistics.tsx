@@ -72,28 +72,30 @@ const ClientLogistics: React.FC = () => {
 
       setIsSubmitting(true);
       try {
-         await addDoc(collection(db, "orders"), {
-            type: 'LOGISTICS',
-            status: 'PENDING',
-            customerId: user?.uid,
-            customerName: profile?.name || 'Logistics Client',
-            pickupLocation: { address: newOrder.pickup }, // Simplified for string input
-            dropoffLocation: { address: newOrder.dropoff },
-            packageSize: newOrder.size,
-            packageConditions: newOrder.conditions,
-            notes: newOrder.notes,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            price: 0, // Pending calculation
-            items: [] // Structure compatibility
+         // Migrated to Server-Side Creation
+         await api.post('/logistics/orders', {
+            pickup: newOrder.pickup,
+            dropoff: newOrder.dropoff,
+            size: newOrder.size,
+            conditions: newOrder.conditions,
+            notes: newOrder.notes
          });
 
+         toast.success("Delivery Request Created!");
          setShowBookForm(false);
          setNewOrder({ pickup: '', dropoff: '', size: 'Medium', conditions: [], notes: '' });
          setActiveTab('LOCAL'); // Switch to view list
+
+         // Refresh list? The real-time listener or effect deps might not trigger unless we force or wait.
+         // ClientLogistics uses 'useEffect' on user.uid. It doesn't listen to changes.
+         // Effectively need to refetch.
+         // Currently useEffect is [user?.uid]. 
+         // We can extract fetchOrders or simpler: reload page or use useQuery.
+         // For now, let's just alert success, user might refresh or we trigger reload.
+         window.location.reload();
       } catch (e) {
          console.error("Order creation failed", e);
-         alert("Failed to create order. Please check your connection.");
+         alert("Failed to create order. Server error.");
       } finally {
          setIsSubmitting(false);
       }

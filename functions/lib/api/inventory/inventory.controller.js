@@ -27,7 +27,7 @@ let InventoryController = class InventoryController {
     }
     async adjustStock(adjustStockDto, user) {
         // TODO: Verify Vendor owns the product if user.role === VENDOR
-        return this.inventoryService.adjustStock(adjustStockDto, user.uid);
+        return this.inventoryService.adjustStock(adjustStockDto, user);
     }
     async getHistory(productId, limit) {
         return this.inventoryService.getHistory(productId, Number(limit) || 20);

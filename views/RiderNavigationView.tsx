@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { doc, updateDoc, onSnapshot, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore'; // Removed updateDoc
 import { db } from '../lib/firebase';
 import { Order } from '../types';
+import { useAuth } from '../Providers';
+import { api } from '../src/services/api';
 
 declare const google: any;
 
@@ -99,15 +101,20 @@ const RiderNavigationView: React.FC = () => {
     }
   }, [mapLoaded, lat, lng]);
 
-  // Added effect to sync order data
+  // Changed to getDoc to avoid Re-render/Update loop with Firestore
   useEffect(() => {
     if (!id) return;
-    const unsub = onSnapshot(doc(db, "orders", id), (snap) => {
-      if (snap.exists()) {
-        setOrder({ id: snap.id, ...snap.data() } as Order);
+    const fetchOrder = async () => {
+      try {
+        const snap = await getDoc(doc(db, "orders", id));
+        if (snap.exists()) {
+          setOrder({ id: snap.id, ...snap.data() } as Order);
+        }
+      } catch (e) {
+        console.error("Order load failed", e);
       }
-    });
-    return () => unsub();
+    };
+    fetchOrder();
   }, [id]);
 
   // Refs for markers to prevent recreation
@@ -115,9 +122,11 @@ const RiderNavigationView: React.FC = () => {
   const customerMarkerRef = useRef<any>(null);
   const lastUpdateRef = useRef<number>(0);
 
+  const { user } = useAuth(); // Added useAuth hook
+
   // Sync Real Location with Throttling
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation || !user?.uid) return;
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -130,13 +139,16 @@ const RiderNavigationView: React.FC = () => {
           googleMap.current?.panTo({ lat: latitude, lng: longitude });
         }
 
-        // Throttle DB updates to every 10 seconds
+        // Throttle API updates to every 10 seconds
         const now = Date.now();
-        if (id && now - lastUpdateRef.current > 10000) {
+        if (now - lastUpdateRef.current > 10000) {
           lastUpdateRef.current = now;
           try {
-            updateDoc(doc(db, "orders", id), {
-              currentLocation: { lat: latitude, lng: longitude }
+            api.post('/logistics/rider/location', {
+              riderId: user.uid,
+              latitude,
+              longitude,
+              status: 'BUSY' // Assume busy if navigating
             }).catch(e => console.error("Loc update failed", e));
           } catch (err) {
             console.error("Loc update error", err);
@@ -148,7 +160,8 @@ const RiderNavigationView: React.FC = () => {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [id]);
+  }, [id, user?.uid]);
+  // ... rest of file
 
   // Handle Markers (Vendor/Customer) - Optimized
   useEffect(() => {

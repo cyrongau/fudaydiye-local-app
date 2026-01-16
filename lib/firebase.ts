@@ -15,8 +15,28 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Initialize App Check
+if (typeof window !== 'undefined') {
+  // Enable debug token for localhost dev
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider('6LeTcEssAAAAANYZ-vh5x6f6K0Q2eDxVsmmuet6c'),
+      isTokenAutoRefreshEnabled: true
+    });
+    console.log("App Check initialized with ReCaptcha Enterprise");
+  } catch (e) {
+    console.error("App Check init failed:", e);
+  }
+}
 
 // Initialize services
 export const auth = getAuth(app);

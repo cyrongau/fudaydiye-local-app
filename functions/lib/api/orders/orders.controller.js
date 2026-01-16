@@ -15,9 +15,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrdersController = void 0;
 const common_1 = require("@nestjs/common");
 const orders_service_1 = require("./orders.service");
-const create_order_dto_1 = require("./dto/create-order.dto");
+const orders_dto_1 = require("./dto/orders.dto");
 const jwt_auth_guard_1 = require("../common/guards/jwt-auth.guard");
+const roles_guard_1 = require("../common/guards/roles.guard");
+const roles_decorator_1 = require("../common/decorators/roles.decorator");
 const user_decorator_1 = require("../common/decorators/user.decorator");
+const users_dto_1 = require("../users/dto/users.dto");
 let OrdersController = class OrdersController {
     constructor(ordersService) {
         this.ordersService = ordersService;
@@ -35,18 +38,23 @@ let OrdersController = class OrdersController {
         // Let's assume for now authenticated only (Mobile App flow).
         return this.ordersService.create(createOrderDto, user.uid);
     }
-    findAll(limit, status, riderId) {
-        // TODO: Filter by User Role (Vendor sees own, User sees own)
-        // For now, exposing all might be insecure if not careful.
-        // Let's keep as is but authenticated.
-        return this.ordersService.findAll(limit, status, riderId);
+    findAll(limit, status, user) {
+        return this.ordersService.findAll(user, limit, status);
     }
     findOne(id) {
         return this.ordersService.findOne(id);
     }
-    // @UseGuards(JwtAuthGuard) // Needed? Start secure.
-    async initiatePayment(id, body) {
-        return this.ordersService.initiatePayment(id, body.userId, body.paymentMethod, body.paymentDetails);
+    async initiatePayment(id, body, user) {
+        return this.ordersService.initiatePayment(id, user.uid, body.paymentMethod, body.paymentDetails);
+    }
+    async cancelOrder(orderId, body, user) {
+        return this.ordersService.cancelOrder(orderId, user.uid, body.reason, user.role);
+    }
+    updateStatus(id, body, user) {
+        return this.ordersService.updateStatus(id, body.status, user.uid);
+    }
+    assignRider(id, body, user) {
+        return this.ordersService.assignRider(id, body.riderId, body.riderName, user.uid);
     }
 };
 __decorate([
@@ -56,17 +64,19 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, user_decorator_1.User)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_order_dto_1.CreateOrderDto, Object]),
+    __metadata("design:paramtypes", [orders_dto_1.CreateOrderDto, Object]),
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Get)(),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, common_1.Query)('limit')),
     __param(1, (0, common_1.Query)('status')),
-    __param(2, (0, common_1.Query)('riderId')),
+    __param(2, (0, user_decorator_1.User)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, String, String]),
+    __metadata("design:paramtypes", [Number, String, Object]),
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "findAll", null);
 __decorate([
@@ -78,15 +88,47 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], OrdersController.prototype, "findOne", null);
 __decorate([
-    (0, common_1.Post)(':id/pay')
-    // @UseGuards(JwtAuthGuard) // Needed? Start secure.
-    ,
+    (0, common_1.Post)(':id/pay'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, user_decorator_1.User)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "initiatePayment", null);
+__decorate([
+    (0, common_1.Post)(':id/cancel-v2'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, user_decorator_1.User)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "cancelOrder", null);
+__decorate([
+    (0, common_1.Patch)(':id/status'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.VENDOR, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, user_decorator_1.User)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.UpdateOrderStatusDto, Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "updateStatus", null);
+__decorate([
+    (0, common_1.Patch)(':id/assign-rider'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(users_dto_1.UserRole.VENDOR, users_dto_1.UserRole.FUDAYDIYE_ADMIN),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, user_decorator_1.User)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, orders_dto_1.AssignRiderDto, Object]),
+    __metadata("design:returntype", void 0)
+], OrdersController.prototype, "assignRider", null);
 OrdersController = __decorate([
     (0, common_1.Controller)('orders'),
     __metadata("design:paramtypes", [orders_service_1.OrdersService])

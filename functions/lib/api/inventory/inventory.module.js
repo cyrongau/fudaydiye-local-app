@@ -13,6 +13,7 @@ const inventory_service_1 = require("./inventory.service");
 let InventoryModule = class InventoryModule {
 };
 InventoryModule = __decorate([
+    (0, common_1.Global)(),
     (0, common_1.Module)({
         controllers: [inventory_controller_1.InventoryController],
         providers: [inventory_service_1.InventoryService],

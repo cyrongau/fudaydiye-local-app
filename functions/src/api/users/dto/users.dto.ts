@@ -81,6 +81,28 @@ export class UpdateProfileDto {
     @IsString()
     @IsOptional()
     plateNumber?: string;
+
+    @IsEmail()
+    @IsOptional()
+    email?: string;
+
+    @IsString()
+    @IsOptional()
+    mobile?: string;
+
+    @IsEnum(KycStatus)
+    @IsOptional()
+    kycStatus?: KycStatus;
+
+    @IsOptional()
+    lat?: number;
+
+    @IsOptional()
+    lng?: number;
+
+    @IsString()
+    @IsOptional()
+    operationalHub?: string;
 }
 
 export class UpdateUserStatusDto {
