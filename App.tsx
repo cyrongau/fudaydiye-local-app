@@ -147,6 +147,14 @@ const MainLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
     return <>{children}</>;
   }
 
+  // CORE FIX: Prevent "Home Flash" before Onboarding
+  // If we are native and haven't onboarded, redirect immediately BEFORE rendering the shell (Navbar/Sidebar)
+  const isNative = Capacitor.isNativePlatform();
+  const hasOnboarded = localStorage.getItem('fddy_onboarding_completed');
+  if (isNative && !hasOnboarded && location.pathname === '/') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">
       {/* Top Navigation: Standard for Web */}

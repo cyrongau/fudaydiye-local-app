@@ -112,6 +112,18 @@ const Footer: React.FC = () => {
               <span className="material-symbols-outlined text-primary">mail</span>
               <p className="text-xs font-black text-white">{business.email}</p>
             </div>
+
+            <div className="pt-6">
+              <a href="/app-release.apk" target="_blank" className="flex items-center gap-3 bg-white/10 hover:bg-white/20 border border-white/10 px-4 py-3 rounded-xl transition-all group w-fit">
+                <div className="size-8 bg-primary rounded-lg flex items-center justify-center text-secondary">
+                  <span className="material-symbols-outlined">android</span>
+                </div>
+                <div className="text-left">
+                  <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Download For</p>
+                  <p className="text-xs font-black text-white">Android</p>
+                </div>
+              </a>
+            </div>
           </div>
         </div>
       </div>
