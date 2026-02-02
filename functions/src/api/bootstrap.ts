@@ -20,6 +20,28 @@ const bootstrapServer = async () => {
 
 export const handleNestRequest = async (req: any, res: any) => {
     try {
+        // Wrap the response object to ensure CORS headers are always set
+        const originalSetHeader = res.setHeader.bind(res);
+        const originalWriteHead = res.writeHead.bind(res);
+
+        // Override setHeader to always include CORS headers
+        res.setHeader = function (name: string, value: any) {
+            originalSetHeader(name, value);
+            return this;
+        };
+
+        // Override writeHead to inject CORS headers
+        res.writeHead = function (statusCode: number, headers?: any) {
+            const corsHeaders = {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Allow-Credentials': 'true',
+                ...headers
+            };
+            return originalWriteHead(statusCode, corsHeaders);
+        };
+
         const server = await bootstrapServer();
         console.log('Incoming Request:', req.method, req.url);
         server(req, res);
