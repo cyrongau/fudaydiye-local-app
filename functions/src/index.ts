@@ -57,15 +57,9 @@ export { onVendorSuspended } from './triggers/vendorTriggers';
 // - /products (CUD)
 // - /auth (OTP Request, Verify)
 
-// Configure CORS middleware
+// Configure CORS middleware - Allow all origins for testing
 const corsHandler = cors({
-    origin: [
-        'https://fudaydiye.com',
-        'https://www.fudaydiye.com',
-        'https://fudaydiye-commerce-1097895058938.us-central1.run.app',
-        'https://fudaydiye-commerce.web.app',
-        'http://localhost:5173',
-    ],
+    origin: true, // Allow all origins temporarily
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
