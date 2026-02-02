@@ -38,5 +38,10 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Deploy to Firebase
-        run: firebase deploy --only functions
+      - name: Deploy to Firebase Functions
+        run: firebase deploy --only functions --project fudaydiye-commerce
+
+      - name: Deployment Summary
+        run: |
+          echo "✅ Firebase Functions deployed successfully!"
+          echo "🔗 API Endpoint: https://us-central1-fudaydiye-commerce.cloudfunctions.net/api"
