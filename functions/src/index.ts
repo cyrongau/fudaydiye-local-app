@@ -1,7 +1,6 @@
 import * as functions from "firebase-functions/v1";
 // Force rebuild 17
 import * as admin from "firebase-admin";
-import * as cors from "cors";
 import { CommunicationFactory } from "./services/CommunicationFactory";
 // import { handleNestRequest } from './api/bootstrap'; // Moved to dynamic import
 
@@ -57,24 +56,26 @@ export { onVendorSuspended } from './triggers/vendorTriggers';
 // - /products (CUD)
 // - /auth (OTP Request, Verify)
 
-// Configure CORS middleware - Allow all origins for testing
-const corsHandler = cors({
-    origin: true, // Allow all origins temporarily
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-});
-
 export const api = functions
     .runWith({
         memory: '1GB',
         timeoutSeconds: 120,
     })
     .https.onRequest(async (req, res) => {
-        // Apply CORS middleware
-        return corsHandler(req, res, async () => {
-            // Lazy load NestJS to prevent cold start timeouts during deployment/init
-            const { handleNestRequest } = await import('./api/bootstrap');
-            return handleNestRequest(req, res);
-        });
+        // Set CORS headers manually - allow all origins for testing
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Max-Age', '3600');
+
+        // Handle preflight OPTIONS request
+        if (req.method === 'OPTIONS') {
+            res.status(204).send('');
+            return;
+        }
+
+        // Lazy load NestJS to prevent cold start timeouts during deployment/init
+        const { handleNestRequest } = await import('./api/bootstrap');
+        return handleNestRequest(req, res);
     });

@@ -8,19 +8,8 @@ const bootstrapServer = async () => {
     if (!cachedServer) {
         const app = await NestFactory.create(AppModule, new ExpressAdapter());
 
-        // Enable CORS for production domains
-        app.enableCors({
-            origin: [
-                'https://fudaydiye.com',
-                'https://www.fudaydiye.com',
-                'https://fudaydiye-commerce-1097895058938.us-central1.run.app',
-                'https://fudaydiye-commerce.web.app',
-                'http://localhost:5173', // Local development
-            ],
-            credentials: true,
-            methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-            allowedHeaders: ['Content-Type', 'Authorization'],
-        });
+        // CORS is handled at Firebase Functions level - disable NestJS CORS
+        // app.enableCors() removed to prevent conflicts
 
         await app.init();
         cachedServer = app.getHttpAdapter().getInstance();
