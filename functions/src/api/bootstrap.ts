@@ -7,7 +7,21 @@ let cachedServer: any;
 const bootstrapServer = async () => {
     if (!cachedServer) {
         const app = await NestFactory.create(AppModule, new ExpressAdapter());
-        app.enableCors({ origin: true });
+
+        // Enable CORS for production domains
+        app.enableCors({
+            origin: [
+                'https://fudaydiye.com',
+                'https://www.fudaydiye.com',
+                'https://fudaydiye-commerce-1097895058938.us-central1.run.app',
+                'https://fudaydiye-commerce.web.app',
+                'http://localhost:5173', // Local development
+            ],
+            credentials: true,
+            methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+            allowedHeaders: ['Content-Type', 'Authorization'],
+        });
+
         await app.init();
         cachedServer = app.getHttpAdapter().getInstance();
         console.log('NestJS App Initialized (Self-Hosted Mode)');
