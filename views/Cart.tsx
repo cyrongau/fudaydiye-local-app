@@ -42,7 +42,7 @@ const Cart: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 md:p-12 max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-8 pb-32">
+      <main className="flex-1 overflow-y-auto p-6 md:p-12 max-w-7xl mx-auto w-full flex flex-col lg:flex-row items-start gap-8 pb-32">
         {cart.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center py-20 animate-in fade-in duration-500 text-center">
             <div className="size-28 rounded-[40px] bg-gray-50 dark:bg-white/5 flex items-center justify-center mb-8 border border-gray-100 dark:border-white/5">
@@ -61,7 +61,7 @@ const Cart: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) => {
           <>
             <div className="flex-1 space-y-6">
               <div className="flex items-center justify-between px-1">
-                <h2 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">Inventory Nodes</h2>
+                <h2 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">Product in Cart</h2>
                 <button
                   onClick={() => { if (window.confirm("Flush selection?")) clearCart(); }}
                   className="text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-950 px-3 py-1 rounded-lg transition-colors"

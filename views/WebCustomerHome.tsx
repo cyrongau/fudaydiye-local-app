@@ -5,8 +5,11 @@ import { useCart, useAuth, useWishlist } from '../Providers';
 import { collection, query, orderBy, onSnapshot, limit, where, getDoc, getDocs, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product, CMSContent, CategoryNode, LiveSaleSession, UserProfile } from '../types';
-import VendorTicker from '../components/VendorTicker';
+
 import CategoryRail from '../components/CategoryRail';
+import CustomerLogisticsPanel from '../components/CustomerLogisticsPanel';
+import HomeBentoGrid from '../components/HomeBentoGrid';
+import SeasonEssentialsGrid from '../components/SeasonEssentialsGrid';
 
 const useAutoScroll = (ref: React.RefObject<HTMLDivElement>, intervalMs = 3000, scrollAmount = 300) => {
    useEffect(() => {
@@ -73,14 +76,10 @@ const WebCustomerHome: React.FC = () => {
    const [promoCards, setPromoCards] = useState<CMSContent[]>([]);
 
    // Refs for auto-scrolling
-   const promoRef1 = React.useRef<HTMLDivElement>(null);
-   const promoRef2 = React.useRef<HTMLDivElement>(null);
    const catRef = React.useRef<HTMLDivElement>(null);
 
    // Apply auto-scroll (slower for categories, faster snap for cards)
    useAutoScroll(catRef, 4000, 200);
-   useAutoScroll(promoRef1, 5000, 300); // 300px approximation or rely on snap behavior
-   useAutoScroll(promoRef2, 6000, 300);
 
    // 1. Static Content Subscriptions (Run Once)
    useEffect(() => {
@@ -306,220 +305,34 @@ const WebCustomerHome: React.FC = () => {
                )}
             </div>
 
-            {/* Dynamic Promo Cards Section */}
+            {/* Dynamic Promo Cards (Bento Grid) */}
             <section className="py-6 md:py-12 w-full">
                <div className="max-w-7xl mx-auto px-6">
-                  <div ref={promoRef1} className="-mx-6 px-6 md:mx-0 md:px-0 flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6 w-full md:w-auto">
-                     {promoCards.length > 0 ? (
-                        promoCards.map((card, idx) => (
-                           <div key={card.id} className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center">
-                              <PromoBanner
-                                 title={card.title}
-                                 promo={card.subtitle}
-                                 img={card.featuredImage}
-                                 tag={card.category}
-                                 orange={idx % 2 !== 0} // Simple alternating style
-                                 link={card.ctaLink}
-                              />
-                           </div>
-                        ))
-                     ) : (
-                        // Fallback / Skeleton or hide if no content
-                        <div className="hidden"></div>
-                     )}
-                  </div>
+                  <HomeBentoGrid items={promoCards} />
                </div>
             </section>
 
          </section >
 
-         {/* 2. Category Rail (Scroll Mobile / Grid Desktop) */}
-         < CategoryRail categories={categories} />
-
-         {/* 3. Flash Deals (Horizontal Scroll) - Controlled by 'isFlashDeal' flag */}
-         {flashDeals.length > 0 && (
-            < section className="py-6 px-6 mb-8 max-w-7xl mx-auto" >
-               <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                     <h3 className="text-lg font-black text-secondary dark:text-white">Flash Deals</h3>
-                     <span className="bg-[#FFEAEA] text-red-500 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">timer</span> {timeLeft}</span>
-                  </div>
-                  <button className="text-[10px] font-bold text-[#06DC7F]">See All</button>
-               </div>
-               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
-                  {flashDeals.map(prod => {
-                     const discount = prod.basePrice > 0 ? Math.round((1 - (prod.salePrice || prod.basePrice) / prod.basePrice) * 100) : 0;
-                     return (
-                        <div key={prod.id} onClick={() => navigate(`/customer/product/${prod.id}`)} className="bg-white dark:bg-white/5 rounded-xl p-2 shadow-sm border border-gray-100 dark:border-white/5 relative group cursor-pointer">
-                           {discount > 0 && <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded z-10">-{discount}%</span>}
-                           <div className="aspect-square bg-gray-50 dark:bg-black/20 rounded-lg mb-2 overflow-hidden relative">
-                              <img src={prod.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                           </div>
-                           <h4 className="text-[11px] font-bold text-gray-700 dark:text-gray-200 truncate mb-1">{prod.name}</h4>
-                           <div className="flex items-center gap-2">
-                              <span className="text-sm font-black text-[#06DC7F]">${prod.salePrice || prod.basePrice}</span>
-                              {prod.salePrice && prod.salePrice < prod.basePrice && <span className="text-[10px] text-gray-400 line-through">${prod.basePrice}</span>}
-                           </div>
-                        </div>
-                     );
-                  })}
-               </div>
-            </section >
-         )}
-
-         {/* 4. New Arrivals (Grid) */}
-         < section className="px-6 pb-20 max-w-7xl mx-auto" >
-            <h3 className="text-lg font-black text-secondary dark:text-white mb-4">New Arrivals</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
-               {products.map(prod => (
-                  <div key={prod.id} onClick={() => navigate(`/customer/product/${prod.id}`)} className="bg-white dark:bg-white/5 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-white/5 relative group">
-                     <div className="aspect-square bg-[#F5F5F7] dark:bg-black/30 rounded-xl mb-3 overflow-hidden relative">
-                        <img src={prod.images[0]} className="w-full h-full object-mix-blend-multiply dark:mix-blend-normal" />
-                        <button onClick={(e) => {
-                           e.stopPropagation();
-                           isInWishlist(prod.id) ? removeFromWishlist(prod.id) : addToWishlist(prod);
-                        }} className={`absolute top-2 right-2 size-6 bg-white rounded-full shadow flex items-center justify-center transition-colors ${isInWishlist(prod.id) ? 'text-red-500' : 'text-gray-400 hover:text-red-500'} `}>
-                           <span className={`material-symbols-outlined text-[14px] ${isInWishlist(prod.id) ? 'fill-current' : ''} `}>favorite</span>
-                        </button>
-                     </div>
-                     <h4 className="text-[11px] font-medium text-gray-600 dark:text-gray-300 leading-tight mb-1 h-8 line-clamp-2">{prod.name}</h4>
-                     <div className="flex items-center justify-between">
-                        <span className="text-sm font-black text-secondary dark:text-white">${prod.basePrice}</span>
-                        <button onClick={(e) => { e.stopPropagation(); addToCart({ productId: prod.id, name: prod.name, price: prod.basePrice, qty: 1, img: prod.images[0], vendor: prod.vendor, vendorId: prod.vendorId, attribute: 'Standard' }); }} className="size-7 bg-[#015754] text-white rounded-lg flex items-center justify-center">
-                           <span className="material-symbols-outlined text-[16px]">add</span>
-                        </button>
-                     </div>
-                  </div>
-               ))}
-            </div>
-         </section >
-
-         {/* Mobile Ad Slider (Mobile Only) */}
-         {
-            mobileAds.length > 0 && (
-               <section className="mb-8 px-4 md:hidden">
-                  <h3 className="text-lg font-black text-secondary dark:text-white mb-4">Sponsored</h3>
-                  <div className="flex flex-nowrap overflow-x-auto gap-4 snap-x snap-mandatory no-scrollbar pb-4">
-                     {mobileAds.map(ad => (
-                        <div key={ad.id} className="min-w-[85vw] snap-center">
-                           {ad.adFormat === 'PRODUCT_CARD' ? (
-                              <div className="bg-white dark:bg-white/5 p-4 rounded-[24px] border border-gray-100 dark:border-white/5 shadow-md flex gap-4 items-center" onClick={() => navigate(ad.ctaLink || `/customer/product/${ad.linkedProductId}`)}>
-                                 <div className="size-24 rounded-2xl bg-gray-100 dark:bg-white/5 flex-shrink-0 overflow-hidden">
-                                    {/* Placeholder if no product data yet, ideal would be to fetch linked product */}
-                                    <img src="https://picsum.photos/200" className="w-full h-full object-cover" />
-                                 </div>
-                                 <div className="flex-1">
-                                    <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Featured</span>
-                                    <h4 className="text-sm font-black text-secondary dark:text-white leading-tight mb-2">{ad.title}</h4>
-                                    <button className="bg-secondary text-white text-[10px] font-bold px-4 py-2 rounded-lg">{ad.ctaText || 'Shop Now'}</button>
-                                 </div>
-                              </div>
-                           ) : (
-                              <div className="relative h-48 rounded-[24px] overflow-hidden shadow-lg" onClick={() => navigate(ad.ctaLink || '#')}>
-                                 <img src={ad.featuredImage} className="absolute inset-0 w-full h-full object-cover" alt={ad.title} />
-                                 <div className="absolute inset-0 bg-black/20"></div>
-                                 <div className="absolute bottom-4 left-4 right-4">
-                                    <h4 className="text-xl font-black text-white leading-none mb-2">{ad.title}</h4>
-                                    <button className="bg-white text-secondary text-[10px] font-bold px-4 py-2 rounded-lg">{ad.ctaText || 'Shop Now'}</button>
-                                 </div>
-                              </div>
-                           )}
-                        </div>
-                     ))}
-                  </div>
-               </section>
-            )
-         }
-
-         {/* Featured Live Session (Mobile Highlight) */}
-         {
-            featuredLive && (
-               <section className="px-4 mb-20 md:hidden">
-                  <div className="rounded-[32px] bg-[#2A0A18] relative overflow-hidden text-white shadow-2xl border border-white/10">
-                     <div className="absolute inset-0">
-                        <img src={featuredLive.featuredProductImg} className="w-full h-full object-cover opacity-60 mix-blend-overlay" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/50"></div>
-                     </div>
-                     <div className="relative z-10 p-6 flex flex-col items-center text-center space-y-4">
-                        <div className="flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full animate-pulse shadow-lg">
-                           <span className="material-symbols-outlined text-[14px]">videocam</span>
-                           <span className="text-[10px] font-black uppercase tracking-widest">Live Now</span>
-                        </div>
-                        <div className="size-16 rounded-full border-2 border-[#06DC7F] p-1 mb-2">
-                           <img src={featuredLive.hostAvatar || "https://ui-avatars.com/api/?name=" + featuredLive.vendorName} className="w-full h-full rounded-full object-cover" />
-                        </div>
-                        <div>
-                           <h3 className="text-2xl font-black uppercase leading-none mb-1">{featuredLive.title}</h3>
-                           <p className="text-xs text-white/70 font-medium">with {featuredLive.vendorName}</p>
-                        </div>
-                        <button onClick={() => navigate(`/customer/live/${featuredLive.id}`)} className="w-full h-12 bg-[#06DC7F] text-[#015754] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-transform flex items-center justify-center gap-2">
-                           Join Session <span className="material-symbols-outlined">arrow_forward</span>
-                        </button>
-                     </div>
-                  </div>
-               </section>
-            )
-         }
-
-         {/* Feature Blocks */}
-         <section className="bg-white dark:bg-surface-dark py-10 border-b border-gray-100 dark:border-white/5">
-            <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
-               <FeatureItem icon="bolt" label="Atomic Dispatch" sub="60min Delivery" />
-               <FeatureItem icon="verified_user" label="Mobile Pay" sub="Secured API" />
-               <FeatureItem icon="history" label="30 Day Return" sub="100% Refundable" />
-               <FeatureItem icon="support_agent" label="Live Hub" sub="24/7 Priority" />
-            </div>
-         </section>
-
-         {/* Taxonomy Strip */}
-         <section className="py-8 md:py-20 w-full">
-            <div className="max-w-7xl mx-auto px-6 text-center mb-6 md:mb-12">
-               <h2 className="text-3xl md:text-5xl font-black text-secondary dark:text-white uppercase tracking-tighter">Browse Hubs</h2>
-               <div className="h-1 w-20 bg-primary mx-auto mt-4 rounded-full"></div>
+         {/* 2. Category Rail (Grid on Desktop / Scroll Mobile) */}
+         <section className="py-8 w-full">
+            <div className="max-w-7xl mx-auto px-6 text-center mb-6 md:mb-10">
+               <h2 className="text-2xl md:text-3xl font-black text-secondary dark:text-white uppercase tracking-tighter">Browse Hubs</h2>
+               <div className="h-1 w-12 bg-primary mx-auto mt-2 rounded-full"></div>
             </div>
 
             <div className="max-w-7xl mx-auto px-6">
-               <div className="-mx-6 px-6 md:mx-0 md:px-0 flex flex-nowrap overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 gap-6 md:gap-12 md:flex-wrap md:justify-center justify-start">
+               {/* Mobile: Scroll, Desktop: Grid */}
+               <div ref={catRef} className="flex md:grid md:grid-cols-6 lg:grid-cols-8 gap-4 md:gap-8 overflow-x-auto md:overflow-visible snap-x snap-mandatory no-scrollbar pb-4 -mx-6 px-6 md:mx-0 md:px-0">
                   {categories.map((cat) => (
-                     <button key={cat.id} onClick={() => navigate(`/customer/category/${cat.name.toLowerCase()}`)} className="flex flex-col items-center gap-4 group shrink-0 snap-center min-w-[80px]">
-                        <div className="size-20 md:size-28 rounded-full bg-primary/10 flex items-center justify-center border-2 border-transparent group-hover:border-primary group-hover:shadow-primary-glow transition-all relative overflow-hidden">
-                           {cat.imageUrl ? <img src={cat.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-20 grayscale group-hover:grayscale-0 group-hover:opacity-40 transition-all" /> : <div className="absolute inset-0 bg-primary opacity-5"></div>}
-                           <span className="material-symbols-outlined text-[32px] md:text-[42px] text-primary group-hover:scale-110 transition-transform relative z-10">{cat.icon || 'category'}</span>
+                     <button key={cat.id} onClick={() => navigate(`/customer/category/${cat.name.toLowerCase()}`)} className="flex flex-col items-center gap-3 group shrink-0 snap-center min-w-[80px] md:min-w-0 md:w-full">
+                        <div className="size-16 md:size-24 rounded-[24px] bg-gray-50 dark:bg-white/5 flex items-center justify-center border border-gray-100 dark:border-white/10 group-hover:border-primary group-hover:bg-primary/5 group-hover:shadow-lg transition-all relative overflow-hidden">
+                           {cat.imageUrl ? <img src={cat.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform" /> : null}
+                           <span className={`material-symbols-outlined text-[28px] md:text-[36px] ${cat.imageUrl ? 'text-white drop-shadow-md' : 'text-gray-400 dark:text-white'} group-hover:text-primary transition-colors relative z-10`}>{cat.icon || 'category'}</span>
                         </div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 group-hover:text-primary transition-colors whitespace-nowrap">{cat.name}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 group-hover:text-secondary dark:group-hover:text-white transition-colors whitespace-nowrap">{cat.name}</span>
                      </button>
                   ))}
-               </div>
-            </div>
-         </section>
-
-         {/* Restored Category Banner Ads Section */}
-         <section className="py-6 md:py-12 w-full">
-            <div className="max-w-7xl mx-auto px-6">
-               <div className="-mx-6 px-6 md:mx-0 md:px-0 flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6">
-                  {(() => {
-                     const topCards = promoCards.filter(c => c.section === 'HOME_TOP_ROW' || !c.section).slice(0, 3);
-                     return topCards.length > 0 ? (
-                        topCards.map((card, idx) => (
-                           <div key={card.id} className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center">
-                              <PromoBanner
-                                 title={card.title}
-                                 promo={card.subtitle}
-                                 img={card.featuredImage}
-                                 tag={card.category}
-                                 orange={idx % 2 !== 0}
-                                 link={card.ctaLink}
-                              />
-                           </div>
-                        ))
-                     ) : (
-                        <>
-                           <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Smart Tech" promo="Up to 40% Off" img="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=1200" tag="Electronics Hub" link="/customer/category/electronics" /></div>
-                           <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Luxe Beauty" promo="New Arrivals" img="https://images.unsplash.com/photo-1596462502278-27bfad4575a6?q=80&w=1200" tag="Cosmetic Node" orange link="/customer/category/beauty" /></div>
-                           <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Home Living" promo="Free Shipping" img="https://images.unsplash.com/photo-1484101403633-562f891dc89a?q=80&w=1200" tag="Interior Mesh" link="/customer/category/home" /></div>
-                        </>
-                     );
-                  })()}
                </div>
             </div>
          </section>
@@ -543,14 +356,13 @@ const WebCustomerHome: React.FC = () => {
             </div>
          </section>
 
-         <section className="py-6 md:py-20 px-6 max-w-7xl mx-auto flex flex-nowrap gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-6">
-            <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Men's Fashion" promo="Flat 70% Off" img="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=1200" tag="Weekend Sale" link="/customer/category/fashion" /></div>
-            <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Women's Wear" promo="Min. 35% Off" img="https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=800" tag="Fashion Style" orange link="/customer/category/fashion" /></div>
-            <div className="min-w-[85vw] md:min-w-0 md:w-auto shrink-0 snap-center"><PromoBanner title="Accessories" promo="Verified Quality" img="https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=1200" tag="Premium Gear" link="/customer/category/accessories" /></div>
+         <section className="py-6 md:py-20 px-6 max-w-7xl mx-auto">
+            <SeasonEssentialsGrid items={promoCards.slice(3, 6)} />
          </section>
 
          {/* Vendor Logo Slider - Infinite Scroll Marquee */}
-         <VendorTicker />
+         <CustomerLogisticsPanel />
+
       </div >
    );
 };

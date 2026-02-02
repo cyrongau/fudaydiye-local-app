@@ -9,6 +9,13 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: '0.0.0.0',
+      proxy: {
+        '/api': {
+          target: 'https://us-central1-fudaydiye-commerce.cloudfunctions.net/api',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, '')
+        }
+      }
     },
     plugins: [react()],
     define: {

@@ -21,6 +21,16 @@ const COMMON_COUNTRY_CODES = [
    { code: '+254', label: 'Kenya', flag: '🇰🇪' },
 ];
 
+// SVG Logo Glob Import (Vite)
+const paymentLogos: Record<string, string> = import.meta.glob('../src/assets/payment/*.svg', { eager: true, import: 'default' });
+
+// Helper to get logo path
+const getProviderLogo = (id: string) => {
+   const filename = id.toLowerCase().replace(/_/g, '-');
+   const key = `../src/assets/payment/${filename}.svg`;
+   return paymentLogos[key];
+};
+
 const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) => {
    const navigate = useNavigate();
    const { cart, cartTotal, clearCart, syncCartId } = useCart();
@@ -450,25 +460,32 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                      <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">Direct Payment Gateway</h3>
                   </div>
                   <div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-4">
-                     {DIRECT_PROVIDERS.map(provider => (
-                        <button
-                           key={provider.id}
-                           onClick={() => { setSelectedMethod(provider.id); setShowCardModal(false); }}
-                           className={`p-6 rounded-[32px] border-2 flex items-center gap-5 transition-all text-left group ${selectedMethod === provider.id
-                              ? 'border-primary bg-primary/5 shadow-soft'
-                              : 'border-gray-50 dark:border-white/5 bg-gray-50/50 dark:bg-white/2 hover:border-primary/20'
-                              }`}
-                        >
-                           <div className={`size-14 rounded-2xl flex items-center justify-center shadow-lg transition-all ${selectedMethod === provider.id ? 'bg-primary text-secondary' : 'bg-white dark:bg-surface-dark text-gray-300'}`}>
-                              <span className="material-symbols-outlined text-3xl">{provider.icon}</span>
-                           </div>
-                           <div className="flex-1 min-w-0">
-                              <h4 className={`text-sm font-black uppercase tracking-tight ${selectedMethod === provider.id ? 'text-secondary dark:text-white' : 'text-gray-500'}`}>{provider.label}</h4>
-                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{provider.telco} API</p>
-                           </div>
-                           {selectedMethod === provider.id && <span className="material-symbols-outlined text-primary font-black">check_circle</span>}
-                        </button>
-                     ))}
+                     {DIRECT_PROVIDERS.map(provider => {
+                        const logoSrc = getProviderLogo(provider.id);
+                        return (
+                           <button
+                              key={provider.id}
+                              onClick={() => { setSelectedMethod(provider.id); setShowCardModal(false); }}
+                              className={`p-6 rounded-[32px] border-2 flex items-center gap-5 transition-all text-left group ${selectedMethod === provider.id
+                                 ? 'border-primary bg-primary/5 shadow-soft'
+                                 : 'border-gray-50 dark:border-white/5 bg-gray-50/50 dark:bg-white/2 hover:border-primary/20'
+                                 }`}
+                           >
+                              <div className={`size-14 rounded-2xl flex items-center justify-center shadow-lg transition-all overflow-hidden ${selectedMethod === provider.id ? 'bg-primary text-secondary' : 'bg-white dark:bg-surface-dark text-gray-300'}`}>
+                                 {logoSrc ? (
+                                    <img src={logoSrc} alt={provider.label} className="w-full h-full object-contain p-2" />
+                                 ) : (
+                                    <span className="material-symbols-outlined text-3xl">{provider.icon}</span>
+                                 )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                 <h4 className={`text-sm font-black uppercase tracking-tight ${selectedMethod === provider.id ? 'text-secondary dark:text-white' : 'text-gray-500'}`}>{provider.label}</h4>
+                                 <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{provider.telco} API</p>
+                              </div>
+                              {selectedMethod === provider.id && <span className="material-symbols-outlined text-primary font-black">check_circle</span>}
+                           </button>
+                        );
+                     })}
 
                      <button
                         onClick={() => { setSelectedMethod('SIMULATED'); setShowCardModal(false); }}
@@ -477,8 +494,12 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                            : 'border-gray-50 dark:border-white/5 bg-gray-50/50 dark:bg-white/2 hover:border-primary/20'
                            }`}
                      >
-                        <div className={`size-14 rounded-2xl flex items-center justify-center shadow-lg transition-all ${selectedMethod === 'SIMULATED' ? 'bg-primary text-secondary' : 'bg-white dark:bg-surface-dark text-gray-300'}`}>
-                           <span className="material-symbols-outlined text-3xl">science</span>
+                        <div className={`size-14 rounded-2xl flex items-center justify-center shadow-lg transition-all overflow-hidden ${selectedMethod === 'SIMULATED' ? 'bg-primary text-secondary' : 'bg-white dark:bg-surface-dark text-gray-300'}`}>
+                           {getProviderLogo('SIMULATED') ? (
+                              <img src={getProviderLogo('SIMULATED')} alt="Simulated" className="w-full h-full object-contain p-2" />
+                           ) : (
+                              <span className="material-symbols-outlined text-3xl">science</span>
+                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                            <h4 className={`text-sm font-black uppercase tracking-tight ${selectedMethod === 'SIMULATED' ? 'text-secondary dark:text-white' : 'text-gray-500'}`}>Simulated Payment</h4>
@@ -494,8 +515,12 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                            : 'border-gray-50 dark:border-white/5 bg-gray-50/50 dark:bg-white/2 hover:border-primary/20'
                            }`}
                      >
-                        <div className={`size-14 rounded-2xl flex items-center justify-center shadow-lg transition-all ${selectedMethod === 'CARD' ? 'bg-primary text-secondary' : 'bg-white dark:bg-surface-dark text-gray-300'}`}>
-                           <span className="material-symbols-outlined text-3xl">credit_card</span>
+                        <div className={`size-14 rounded-2xl flex items-center justify-center shadow-lg transition-all overflow-hidden ${selectedMethod === 'CARD' ? 'bg-primary text-secondary' : 'bg-white dark:bg-surface-dark text-gray-300'}`}>
+                           {getProviderLogo('CARD') ? (
+                              <img src={getProviderLogo('CARD')} alt="Credit Card" className="w-full h-full object-contain p-2" />
+                           ) : (
+                              <span className="material-symbols-outlined text-3xl">credit_card</span>
+                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                            <h4 className={`text-sm font-black uppercase tracking-tight ${selectedMethod === 'CARD' ? 'text-secondary dark:text-white' : 'text-gray-500'}`}>Credit Card</h4>
@@ -574,7 +599,7 @@ const Checkout: React.FC<{ isAuthenticated: boolean }> = ({ isAuthenticated }) =
                      <div className="relative z-10 space-y-12">
                         <div>
                            <p className="text-[11px] font-black text-primary uppercase tracking-[0.5em] mb-4">Final Settlement Total</p>
-                           <h2 className="text-5xl lg:text-6xl font-black tracking-tighter leading-none whitespace-nowrap">
+                           <h2 className={`${displayCurrency === 'SLSH' ? 'text-3xl lg:text-4xl' : 'text-5xl lg:text-6xl'} font-black tracking-tighter leading-none whitespace-nowrap transition-all duration-300`}>
                               {displayCurrency === 'USD' ? '$' : 'SLSH '}{finalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                            </h2>
                            {isSlshPayment && <p className="text-white/50 text-[10px] uppercase font-bold tracking-widest mt-2">{totalUsd.toFixed(2)} USD Eqv.</p>}

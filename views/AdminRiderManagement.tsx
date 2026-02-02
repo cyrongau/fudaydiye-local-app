@@ -62,6 +62,9 @@ const AdminRiderManagement: React.FC = () => {
   ];
 
   const filteredRiders = riders.filter(r => {
+    // Hide deleted nodes unless specifically investigating (future feature)
+    if (r.riderStatus === 'DELETED') return false;
+
     if (filter === 'ALL') return true;
     if (filter === 'PENDING') return r.kycStatus === 'PENDING' || r.status === 'PENDING';
     if (filter === 'SUSPENDED') return r.riderStatus === 'SUSPENDED';

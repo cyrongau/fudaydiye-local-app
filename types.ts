@@ -1,5 +1,5 @@
 
-export type UserRole = 'CUSTOMER' | 'VENDOR' | 'RIDER' | 'CLIENT' | 'ADMIN' | 'FUDAYDIYE_ADMIN';
+export type UserRole = 'CUSTOMER' | 'VENDOR' | 'RIDER' | 'CLIENT' | 'ADMIN' | 'FUDAYDIYE_ADMIN' | 'SUPER_ADMIN';
 export type ProductType = 'SIMPLE' | 'VARIABLE' | 'EXTERNAL';
 export type VideoProvider = 'AGORA' | 'LIVEKIT';
 

@@ -7,6 +7,8 @@ import { CartNode } from '../types';
 import { useAuth } from '../Providers';
 import { GoogleGenAI } from "@google/genai";
 
+import { useModal } from '../components/ModalProvider';
+
 const AdminAbandonmentReport: React.FC = () => {
    const navigate = useNavigate();
    const { role, user } = useAuth();
@@ -17,6 +19,8 @@ const AdminAbandonmentReport: React.FC = () => {
    const [communicationChannel, setCommunicationChannel] = useState<'EMAIL' | 'SMS' | 'WHATSAPP'>('EMAIL');
    const [useTemplate, setUseTemplate] = useState(false);
    const [selectedTemplate, setSelectedTemplate] = useState('abandoned_cart_recovery');
+
+   const { confirm, status } = useModal();
 
    const WHATSAPP_TEMPLATES = [
       { id: 'abandoned_cart_recovery', name: 'Standard Recovery (Default)' },
@@ -115,6 +119,8 @@ const AdminAbandonmentReport: React.FC = () => {
       }
    };
 
+   // handleConfirmDelete removed, logic moved inline to confirm callback
+
    return (
       <div className="flex flex-col h-full animate-in fade-in duration-700 font-display">
          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
@@ -123,7 +129,7 @@ const AdminAbandonmentReport: React.FC = () => {
                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.4em] mt-3">Cart Abandonment Intelligence</p>
             </div>
             <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-primary/20">
-               {carts.length} Nodes Detected
+               {carts.length} Carts Detected
             </div>
          </header>
 
@@ -145,7 +151,7 @@ const AdminAbandonmentReport: React.FC = () => {
                                  <span className="material-symbols-outlined text-3xl">shopping_cart</span>
                               </div>
                               <div>
-                                 <h4 className="text-sm font-black text-secondary dark:text-white uppercase leading-none mb-1.5">{cart.userId ? 'Registered Node' : 'Guest Identity'}</h4>
+                                 <h4 className="text-sm font-black text-secondary dark:text-white uppercase leading-none mb-1.5">{cart.userId ? 'Active Cart' : 'Guest Visitor'}</h4>
                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Last Activity: {new Date(cart.updatedAt?.seconds * 1000).toLocaleTimeString()}</p>
                               </div>
                            </div>
@@ -171,9 +177,38 @@ const AdminAbandonmentReport: React.FC = () => {
                               className="flex-1 h-12 bg-secondary text-primary font-black text-[10px] uppercase tracking-[0.2em] rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
                            >
                               <span className={`material-symbols-outlined text-[18px] ${isGenerating === cart.id ? 'animate-spin' : ''}`}>psychology</span>
-                              {isGenerating === cart.id ? 'Analyzing Logic...' : 'Build Recovery Node'}
+                              {isGenerating === cart.id ? 'Drafting...' : 'Send Recovery'}
                            </button>
-                           <button onClick={() => deleteDoc(doc(db, "carts", cart.id))} className="size-12 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-red-500"><span className="material-symbols-outlined">delete</span></button>
+                           <button
+                              onClick={() => {
+                                 confirm({
+                                    title: "Delete Abandoned Cart?",
+                                    message: "This action cannot be undone. usage data associated with this cart will be permanently removed.",
+                                    confirmLabel: "Delete Cart",
+                                    isDestructive: true,
+                                    onConfirm: async () => {
+                                       try {
+                                          await deleteDoc(doc(db, "carts", cart.id));
+                                          setCarts(prev => prev.filter(c => c.id !== cart.id));
+                                          status({
+                                             type: 'SUCCESS',
+                                             title: 'Cart Removed',
+                                             message: 'The abandoned cart has been successfully removed from the database.'
+                                          });
+                                       } catch (e) {
+                                          status({
+                                             type: 'ERROR',
+                                             title: 'Deletion Failed',
+                                             message: 'An error occurred while trying to delete the cart. Please try again.'
+                                          });
+                                       }
+                                    }
+                                 });
+                              }}
+                              className="size-12 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                           >
+                              <span className="material-symbols-outlined">delete</span>
+                           </button>
                         </div>
                      </div>
                   ))
@@ -184,7 +219,7 @@ const AdminAbandonmentReport: React.FC = () => {
                <section className="bg-primary text-secondary p-8 rounded-[48px] shadow-2xl relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-20"><span className="material-symbols-outlined text-4xl">campaign</span></div>
                   <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-[10px] font-black uppercase tracking-[0.3em]">{role === 'ADMIN' ? 'Strategic Intelligence' : 'Recovery Protocol'}</h3>
+                     <h3 className="text-[10px] font-black uppercase tracking-[0.3em]">Recovery Actions</h3>
                      {role === 'VENDOR' && (
                         <div className="flex gap-2">
                            {communicationChannel === 'WHATSAPP' && (
@@ -244,7 +279,7 @@ const AdminAbandonmentReport: React.FC = () => {
                                  Send {communicationChannel}
                               </button>
                            )}
-                           <button onClick={() => setRecoveryMessage(null)} className="w-full text-center text-[9px] font-black uppercase tracking-widest opacity-60">Reset AI Node</button>
+                           <button onClick={() => setRecoveryMessage(null)} className="w-full text-center text-[9px] font-black uppercase tracking-widest opacity-60">Reset</button>
                         </div>
                      ) : (
                         <div className="py-10 text-center opacity-40">
@@ -252,7 +287,7 @@ const AdminAbandonmentReport: React.FC = () => {
                            <p className="text-[10px] font-black uppercase tracking-widest">
                               {role === 'ADMIN'
                                  ? 'Generate high-level strategies to reduce platform-wide abandonment.'
-                                 : 'Select a cart node to generate intelligence-led recovery scripts.'}
+                                 : 'Select a cart to generate intelligence-led recovery scripts.'}
                            </p>
                            {role === 'ADMIN' && (
                               <button
@@ -279,6 +314,8 @@ const AdminAbandonmentReport: React.FC = () => {
                </section>
             </div>
          </main>
+
+
       </div>
    );
 };

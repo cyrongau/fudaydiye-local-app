@@ -10,6 +10,7 @@ import logo from '../assets/icon.png';
 interface LoginProps {
   onLogin: () => void;
   setAppRole: (role: UserRole) => void;
+  isModal?: boolean;
 }
 
 const COUNTRY_CODES = [
@@ -20,7 +21,7 @@ const COUNTRY_CODES = [
   { code: '+971', label: 'UAE', flag: '🇦🇪' },
 ];
 
-const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, setAppRole, isModal = false }) => {
   const [method, setMethod] = useState<'phone' | 'email'>('email');
   const [inputValue, setInputValue] = useState('');
   const [password, setPassword] = useState('');
@@ -152,7 +153,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
           RIDER: '/rider',
           CLIENT: '/client',
           ADMIN: '/admin',
-          FUDAYDIYE_ADMIN: '/admin'
+          FUDAYDIYE_ADMIN: '/admin',
+          SUPER_ADMIN: '/admin'
         };
 
         navigate(routes[actualRole] || '/customer');
@@ -221,7 +223,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
       const { sendPasswordResetEmail } = await import('firebase/auth');
       await sendPasswordResetEmail(auth, inputValue);
       setError("Password reset link sent to your email.");
-      setIsResetMode(false);
+      // Do not unset reset mode immediately so user can see success or try again
     } catch (e: any) {
       console.error(e);
       setError("Failed to send reset link: " + e.message);
@@ -240,27 +242,34 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
   };
 
   return (
-    <div className="relative flex flex-col min-h-screen overflow-y-auto bg-background-light dark:bg-background-dark transition-colors duration-500 font-display pb-32">
+    <div className={`relative flex flex-col items-center justify-center font-display transition-colors duration-500 ${isModal ? 'bg-white dark:bg-surface-dark w-full' : 'min-h-screen overflow-y-auto bg-background-light dark:bg-background-dark pb-32'}`}>
       <div id="recaptcha-container"></div>
-      <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-cover bg-center opacity-[0.1] grayscale" style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2074&auto=format&fit=crop")' }}></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-secondary/20 via-background-light/60 to-background-light dark:from-primary/5 dark:via-background-dark/80 dark:to-background-dark pointer-events-none"></div>
-      </div>
-
-      <div className="relative z-20 flex flex-col items-center pt-24">
-        <div className="size-24 bg-white dark:bg-white/10 rounded-[28px] flex items-center justify-center shadow-2xl animate-float border border-white/10 p-4">
-          <img src={logo} alt="Fudaydiye" className="w-full h-full object-contain" />
+      {!isModal && (
+        <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0 bg-cover bg-center opacity-[0.1] grayscale" style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2074&auto=format&fit=crop")' }}></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-secondary/20 via-background-light/60 to-background-light dark:from-primary/5 dark:via-background-dark/80 dark:to-background-dark pointer-events-none"></div>
         </div>
-        <div className="mt-8 text-center px-8">
-          <h1 className="text-3xl font-black tracking-tight text-secondary dark:text-white mb-2 uppercase">Gatekeeper</h1>
-          <div className="flex items-center gap-2 justify-center">
-            <span className="text-[10px] font-black text-secondary/40 dark:text-primary/40 uppercase tracking-[0.3em]">Identity Protocol 2.5.1</span>
+      )}
+
+      {!isModal && (
+        <div className="relative z-20 flex flex-col items-center pt-24">
+          <div className="size-24 bg-white dark:bg-white/10 rounded-[28px] flex items-center justify-center shadow-2xl animate-float border border-white/10 p-4">
+            <img src={logo} alt="Fudaydiye" className="w-full h-full object-contain" />
           </div>
-          {error && <p className="mt-6 text-[10px] font-black text-red-500 bg-red-50 dark:bg-red-500/10 py-3 px-6 rounded-2xl border border-red-100 dark:border-red-500/20 animate-shake">{error}</p>}
+          <div className="mt-8 text-center px-8">
+            <h1 className="text-3xl font-black tracking-tight text-secondary dark:text-white mb-2 uppercase">Fudaydiye Login</h1>
+            <div className="flex items-center gap-2 justify-center">
+              {/* <span className="text-[10px] font-black text-secondary/40 dark:text-primary/40 uppercase tracking-[0.3em]">Identity Protocol 2.5.1</span> */}
+              <span className="text-[10px] font-black text-secondary/40 dark:text-primary/40 uppercase tracking-[0.3em]">Secure Access</span>
+            </div>
+            {error && <p className="mt-6 text-[10px] font-black text-red-500 bg-red-50 dark:bg-red-500/10 py-3 px-6 rounded-2xl border border-red-100 dark:border-red-500/20 animate-shake">{error}</p>}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="mt-auto relative z-30 w-full bg-white/95 dark:bg-surface-dark/95 backdrop-blur-2xl rounded-t-[48px] p-10 pb-16 shadow-[0_-20px_80px_rgba(0,0,0,0.2)] border-t border-white/10">
+      <div className={`relative z-30 w-full max-w-lg mx-auto ${isModal ? 'bg-transparent p-6' : 'bg-white/95 dark:bg-surface-dark/95 backdrop-blur-2xl rounded-[48px] p-10 shadow-2xl border border-white/10 my-10'}`}>
+        {isModal && error && <p className="mb-6 text-[10px] font-black text-center text-red-500 bg-red-50 dark:bg-red-500/10 py-3 px-6 rounded-2xl border border-red-100 dark:border-red-500/20 animate-shake">{error}</p>}
+        {isModal && <h2 className="text-2xl font-black text-center mb-6 text-secondary dark:text-white uppercase">Login Required</h2>}
         <form onSubmit={handleSubmit} className="flex flex-col gap-8 max-w-sm mx-auto">
           <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-2xl border border-gray-200 dark:border-white/10 relative">
             <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-secondary dark:bg-primary rounded-xl transition-all duration-500 ease-out shadow-lg ${method === 'phone' ? 'left-1' : 'left-[50%]'}`} />
@@ -312,7 +321,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
                 <div className="flex justify-end pt-1">
                   <button
                     type="button"
-                    onClick={handleForgotPassword}
+                    onClick={() => navigate('/forgot-password')}
                     className="text-[9px] font-bold text-gray-400 hover:text-primary transition-colors uppercase tracking-wider"
                   >
                     Forgot Password?
@@ -356,15 +365,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, setAppRole }) => {
             }
           </button>
 
-          <div className="flex flex-col items-center gap-6 mt-2">
-            <button type="button" onClick={() => navigate('/register')} className="text-[10px] font-black text-secondary dark:text-primary uppercase tracking-widest underline decoration-2 underline-offset-8">Create Profile</button>
-            <div className="flex items-center gap-4 w-full px-12">
-              <div className="h-px bg-gray-200 dark:bg-white/10 flex-1"></div>
-              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">OR</span>
-              <div className="h-px bg-gray-200 dark:bg-white/10 flex-1"></div>
+          {!isModal && (
+            <div className="flex flex-col items-center gap-6 mt-2">
+              <button type="button" onClick={() => navigate('/register')} className="text-[10px] font-black text-secondary dark:text-primary uppercase tracking-widest underline decoration-2 underline-offset-8">Create Profile</button>
+              <div className="flex items-center gap-4 w-full px-12">
+                <div className="h-px bg-gray-200 dark:bg-white/10 flex-1"></div>
+                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">OR</span>
+                <div className="h-px bg-gray-200 dark:bg-white/10 flex-1"></div>
+              </div>
+              <button type="button" onClick={() => navigate('/')} className="text-[10px] font-black text-gray-400 hover:text-primary uppercase tracking-widest transition-colors">Continue as Guest</button>
             </div>
-            <button type="button" onClick={() => navigate('/')} className="text-[10px] font-black text-gray-400 hover:text-primary uppercase tracking-widest transition-colors">Continue as Guest</button>
-          </div>
+          )}
         </form>
       </div>
     </div>

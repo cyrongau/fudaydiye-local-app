@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import BottomNav from '../components/BottomNav';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { useAuth } from '../Providers';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
@@ -214,13 +213,6 @@ const RiderJobAssignmentList: React.FC = () => {
         confirmLabel="Reject Job"
         isDestructive={true}
       />
-
-      <BottomNav items={[
-        { label: 'Home', icon: 'home', path: '/rider' },
-        { label: 'Jobs', icon: 'assignment', path: '/rider/assignments' },
-        { label: 'Wallet', icon: 'account_balance_wallet', path: '/rider/wallet' },
-        { label: 'Settings', icon: 'settings', path: '/rider/settings' },
-      ]} />
     </div >
   );
 };

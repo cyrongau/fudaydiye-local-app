@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../Providers';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import BottomNav from '../components/BottomNav';
 import { RiderService } from '../src/lib/services/riderService';
 
 const RiderStatusUpdates: React.FC = () => {
@@ -150,8 +149,8 @@ const RiderStatusUpdates: React.FC = () => {
         </section>
       </main>
 
-      <BottomNav />
-    </div>
+
+    </div >
   );
 };
 

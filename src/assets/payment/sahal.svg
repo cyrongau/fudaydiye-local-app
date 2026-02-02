@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 714 714">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #fafffd;
+      }
+
+      .cls-2 {
+        letter-spacing: -.02em;
+      }
+
+      .cls-3 {
+        fill: #1b5d4c;
+        font-family: Inter-Bold, Inter;
+        font-size: 100.76px;
+        font-variation-settings: 'opsz' 14, 'wght' 700;
+        font-weight: 700;
+      }
+
+      .cls-4 {
+        fill: #059669;
+      }
+
+      .cls-5 {
+        fill: #6ee7b7;
+      }
+
+      .cls-6 {
+        letter-spacing: -.01em;
+      }
+    </style>
+  </defs>
+  <rect class="cls-1" x="16.5" y="21" width="681" height="672" rx="47.5" ry="47.5"/>
+  <g>
+    <rect class="cls-5" x="40.96" y="333.67" width="124.15" height="31.18" rx="15.59" ry="15.59" transform="translate(422.85 523.37) rotate(135)"/>
+    <rect class="cls-4" x="40.4" y="333" width="124.15" height="31.41" rx="15.7" ry="15.7" transform="translate(276.59 29.67) rotate(45)"/>
+    <text class="cls-3" transform="translate(203.35 384.28)"><tspan x="0" y="0">Sahal</tspan><tspan class="cls-6" x="273" y="0">P</tspan><tspan class="cls-2" x="337.01" y="0">a</tspan><tspan x="393.78" y="0">y</tspan></text>
+  </g>
+</svg>

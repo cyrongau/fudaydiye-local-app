@@ -1,10 +1,12 @@
 
 import React, { useState, createContext, useContext, ReactNode, useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'; // Might be unused now in App.tsx but checked later.
 import { doc, onSnapshot, setDoc, getDoc, serverTimestamp, updateDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore'; // Check usage
 import { auth, db } from './lib/firebase';
 import { Providers, useAuth } from './Providers';
+import { UserRole, CartItem, UserProfile, CartNode } from './types';
 
 import Navbar from './components/Navbar';
 import DashboardHeader from './components/DashboardHeader';
@@ -20,7 +22,8 @@ import { api } from './src/services/api';
 
 import Login from './views/Login';
 import Register from './views/Register';
-import RoleSelection from './views/RoleSelection';
+import ForgotPassword from './views/ForgotPassword';
+
 import MobileMenu from './views/MobileMenu';
 import CustomerHome from './views/CustomerHome';
 import CustomerExplore from './views/CustomerExplore';
@@ -35,12 +38,16 @@ import VendorProductManagement from './views/VendorProductManagement';
 import VendorProductImport from './views/VendorProductImport';
 import VendorOrderFulfillment from './views/VendorOrderFulfillment';
 import VendorReviews from './views/VendorReviews';
+
+import AdminLogisticsSettings from './views/AdminLogisticsSettings';
 import VendorStoreManagement from './views/VendorStoreManagement';
 import VendorStoreUsers from './views/VendorStoreUsers';
 import VendorLiveSaleSetup from './views/VendorLiveSaleSetup';
 import VendorLiveSessions from './views/VendorLiveSessions';
 import LiveStream from './views/LiveStream';
 import RiderJobs from './views/RiderJobs';
+import RiderHome from './views/RiderHome'; // NEW
+import RiderTracking from './views/RiderTracking'; // NEW
 import RiderJobAssignmentList from './views/RiderJobAssignmentList';
 import RiderPickupConfirmation from './views/RiderPickupConfirmation';
 import RiderDeliveryConfirmation from './views/RiderDeliveryConfirmation';
@@ -48,7 +55,7 @@ import RiderStatusUpdates from './views/RiderStatusUpdates';
 import RiderWallet from './views/RiderWallet';
 import RiderNavigationView from './views/RiderNavigationView';
 import PaymentConfirmation from './views/PaymentConfirmation';
-import ClientLogistics from './views/ClientLogistics';
+
 import ClientAnalytics from './views/ClientAnalytics';
 import ClientInvoices from './views/ClientInvoices';
 import ClientSupport from './views/ClientSupport';
@@ -92,8 +99,11 @@ import VendorLiveCockpit from './views/VendorLiveCockpit';
 import ContactUs from './views/ContactUs';
 import WalletView from './views/WalletView';
 import ScrollToTop from './components/ScrollToTop';
-import { ToastProvider } from './components/Toast';
+import { ToastProvider } from './components/Toast'; // Restore ToastProvider
+import { ModalProvider } from './components/ModalProvider'; // Keep ModalProvider
 import Onboarding from './views/Onboarding';
+import SeedView from './views/SeedView';
+import AdminShippingSettings from './views/AdminShippingSettings';
 
 const RootRedirect: React.FC = () => {
   const hasOnboarded = localStorage.getItem('fddy_onboarding_completed');
@@ -104,8 +114,6 @@ const RootRedirect: React.FC = () => {
   }
   return <CustomerHome />;
 };
-
-import { UserRole, CartItem, UserProfile, CartNode } from './types';
 
 const ProtectedRoute: React.FC<{ children: ReactNode; allowedRoles?: UserRole[] }> = ({ children, allowedRoles }) => {
   const { user, role, loading } = useAuth();
@@ -132,7 +140,7 @@ const MainLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const location = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  const isAuthPage = ['/login', '/register', '/select-identity'].includes(location.pathname);
+  const isAuthPage = ['/login', '/register'].includes(location.pathname);
 
   const isDashboardRoute = location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/vendor') ||
@@ -170,7 +178,7 @@ const MainLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
 
         <main className={`flex-1 overflow-y-auto no-scrollbar pb-24 md:pb-0 transition-all duration-500 ${isDashboardRoute && !isAuthPage ? 'bg-gray-50/30 dark:bg-black/10' : ''}`}>
           <PullToRefresh>
-            <div className={`${isDashboardRoute && !isAuthPage ? 'p-6 lg:p-10' : ''}`}>
+            <div className={`${(isDashboardRoute && !isAuthPage && !location.pathname.startsWith('/rider')) ? 'p-6 lg:p-10' : ''}`}>
               {children}
             </div>
             {/* Footer on Web, hidden on Dashboard */}
@@ -180,8 +188,9 @@ const MainLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       </div>
 
       {/* Web Mobile Bottom Nav (for mobile browsers, not native app if using isNative check correctly) */}
+      {/* Web Mobile Bottom Nav (for mobile browsers, not native app if using isNative check correctly) */}
       <div className="md:hidden">
-        {!isAuthPage && <BottomNav />}
+        {!isAuthPage && !location.pathname.startsWith('/rider') && <BottomNav />}
       </div>
     </div>
   );
@@ -202,12 +211,23 @@ const App: React.FC = () => {
     <ErrorBoundary>
       <Providers>
         <ToastProvider>
-          <Router>
-            <ScrollToTop />
-            <Layout>
-              <AppRoutes />
-            </Layout>
-          </Router>
+          <ModalProvider>
+            <Router>
+              <ScrollToTop />
+              <Toaster position="top-center" toastOptions={{
+                style: {
+                  background: '#333',
+                  color: '#fff',
+                  fontFamily: 'Plus Jakarta Sans',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                }
+              }} />
+              <Layout>
+                <AppRoutes />
+              </Layout>
+            </Router>
+          </ModalProvider>
         </ToastProvider>
       </Providers>
     </ErrorBoundary>
@@ -225,11 +245,12 @@ const AppRoutes: React.FC = () => {
       <LocationTracker />
       <Routes>
         <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/seed" element={<SeedView />} />
         <Route path="/" element={<RootRedirect />} />
-        <Route path="/select-identity" element={<RoleSelection onSelectRole={() => { }} />} />
         <Route path="/mobile-menu" element={<MobileMenu />} />
 
         <Route path="/login" element={<Login onLogin={() => { }} setAppRole={() => { }} />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/register" element={<Register onRegister={() => { }} setAppRole={() => { }} />} />
         <Route path="/customer" element={<CustomerHome />} />
         <Route path="/customer/explore" element={<CustomerExplore />} />
@@ -259,12 +280,12 @@ const AppRoutes: React.FC = () => {
         <Route path="/blog" element={<BlogList />} />
         <Route path="/blog/:slug" element={<BlogPostDetail />} />
 
-        <Route path="/admin/cms" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminCMSDashboard /></ProtectedRoute>} />
-        <Route path="/admin/cms/edit/:type/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminCMSEditor /></ProtectedRoute>} />
-        <Route path="/admin/cms/create/:type" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminCMSEditor /></ProtectedRoute>} />
-        <Route path="/admin/abandonment" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminAbandonmentReport /></ProtectedRoute>} />
-        <Route path="/admin/config" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminConfig /></ProtectedRoute>} />
-        <Route path="/admin/categories" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminCategoryManagement /></ProtectedRoute>} />
+        <Route path="/admin/cms" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminCMSDashboard /></ProtectedRoute>} />
+        <Route path="/admin/cms/edit/:type/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminCMSEditor /></ProtectedRoute>} />
+        <Route path="/admin/cms/create/:type" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminCMSEditor /></ProtectedRoute>} />
+        <Route path="/admin/abandonment" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminAbandonmentReport /></ProtectedRoute>} />
+        <Route path="/admin/config" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><AdminConfig /></ProtectedRoute>} />
+        <Route path="/admin/categories" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminCategoryManagement /></ProtectedRoute>} />
 
         <Route path="/vendor" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorDashboard /></ProtectedRoute>} />
         <Route path="/vendor/management" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><VendorProductManagement /></ProtectedRoute>} />
@@ -283,13 +304,13 @@ const AppRoutes: React.FC = () => {
         <Route path="/vendor/settings" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><UserSettings /></ProtectedRoute>} />
         <Route path="/vendor/scan" element={<ProtectedRoute allowedRoles={['VENDOR', 'FUDAYDIYE_ADMIN']}><GlobalScanView role="VENDOR" /></ProtectedRoute>} />
 
-        <Route path="/rider" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderJobs /></ProtectedRoute>} />
-        <Route path="/rider/assignments" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderJobAssignmentList /></ProtectedRoute>} />
+        <Route path="/rider" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderHome /></ProtectedRoute>} />
+        <Route path="/rider/assignments" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderJobs /></ProtectedRoute>} />
         <Route path="/rider/pickup/:id" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderPickupConfirmation /></ProtectedRoute>} />
         <Route path="/rider/confirm/:id" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderDeliveryConfirmation /></ProtectedRoute>} />
         <Route path="/rider/status" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderStatusUpdates /></ProtectedRoute>} />
         <Route path="/rider/wallet" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderWallet /></ProtectedRoute>} />
-        <Route path="/rider/navigate/:id" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderNavigationView /></ProtectedRoute>} />
+        <Route path="/rider/navigate/:id" element={<ProtectedRoute allowedRoles={['RIDER']}><RiderTracking /></ProtectedRoute>} />
         <Route path="/rider/settings" element={<ProtectedRoute allowedRoles={['RIDER']}><UserSettings /></ProtectedRoute>} />
         <Route path="/rider/scan" element={<ProtectedRoute allowedRoles={['RIDER']}><GlobalScanView role="RIDER" /></ProtectedRoute>} />
         {/* Reusing RiderWallet path but pointing to new component or keeping separate? User asked for WalletView */}
@@ -298,25 +319,25 @@ const AppRoutes: React.FC = () => {
 
 
         {/* Client Routes */}
-        <Route path="/client" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientLogistics /></ProtectedRoute>} />
         <Route path="/client/analytics" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientAnalytics /></ProtectedRoute>} />
         <Route path="/client/invoices" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientInvoices /></ProtectedRoute>} />
         <Route path="/client/support" element={<ProtectedRoute allowedRoles={['CLIENT']}><ClientSupport /></ProtectedRoute>} />
         <Route path="/client/settings" element={<ProtectedRoute allowedRoles={['CLIENT']}><UserSettings /></ProtectedRoute>} />
 
-        <Route path="/admin" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminPlatformOverview /></ProtectedRoute>} />
-        <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminFinancialReports /></ProtectedRoute>} />
-        <Route path="/admin/report" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminSystemReport /></ProtectedRoute>} />
-        <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminVendorManagement /></ProtectedRoute>} />
-        <Route path="/admin/vendor/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminVendorProfile /></ProtectedRoute>} />
-        <Route path="/admin/riders" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminRiderManagement /></ProtectedRoute>} />
-        <Route path="/admin/rider/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminRiderProfile /></ProtectedRoute>} />
-        <Route path="/admin/logistics" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminLogisticsControl /></ProtectedRoute>} />
-        <Route path="/admin/dispatch" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminDispatchConsole /></ProtectedRoute>} />
-        <Route path="/admin/audits" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminAudits /></ProtectedRoute>} />
-        <Route path="/admin/live-moderation" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminLiveSaleModeration /></ProtectedRoute>} />
-        <Route path="/admin/hubs" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN']}><AdminHubs /></ProtectedRoute>} />
-        <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['ADMIN']}><UserSettings /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminPlatformOverview /></ProtectedRoute>} />
+        <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminFinancialReports /></ProtectedRoute>} />
+        <Route path="/admin/report" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminSystemReport /></ProtectedRoute>} />
+        <Route path="/admin/shipping" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminShippingSettings /></ProtectedRoute>} />
+        <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminVendorManagement /></ProtectedRoute>} />
+        <Route path="/admin/vendor/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminVendorProfile /></ProtectedRoute>} />
+        <Route path="/admin/riders" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminRiderManagement /></ProtectedRoute>} />
+        <Route path="/admin/rider/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminRiderProfile /></ProtectedRoute>} />
+        <Route path="/admin/logistics" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminLogisticsControl /></ProtectedRoute>} />
+        <Route path="/admin/dispatch" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminDispatchConsole /></ProtectedRoute>} />
+        <Route path="/admin/audits" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminAudits /></ProtectedRoute>} />
+        <Route path="/admin/live-moderation" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminLiveSaleModeration /></ProtectedRoute>} />
+        <Route path="/admin/hubs" element={<ProtectedRoute allowedRoles={['ADMIN', 'FUDAYDIYE_ADMIN', 'SUPER_ADMIN']}><AdminHubs /></ProtectedRoute>} />
+        <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}><UserSettings /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

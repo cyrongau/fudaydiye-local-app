@@ -14,7 +14,7 @@ import { UserRole } from '../types';
  */
 export const seedTestUsers = async () => {
   const batch = writeBatch(db);
-  
+
   // 1. Super Admin Profile (Root Identity)
   const adminRef = doc(db, "users", "system_super_admin");
   batch.set(adminRef, {
@@ -30,6 +30,56 @@ export const seedTestUsers = async () => {
     trustTier: 'GOLD',
     createdAt: serverTimestamp(),
     avatar: `https://ui-avatars.com/api/?name=Admin&background=015754&color=06DC7F`
+  });
+
+  // 1a. Fudaydiye Admin (Role: FUDAYDIYE_ADMIN)
+  const fddyAdminRef = doc(db, "users", "fudaydiye_admin_01");
+  batch.set(fddyAdminRef, {
+    uid: "fudaydiye_admin_01",
+    fullName: "Fudaydiye Admin",
+    businessName: "Fudaydiye Ops",
+    email: "info@fudaydiye.com",
+    mobile: "+252638555590",
+    role: 'FUDAYDIYE_ADMIN' as UserRole,
+    location: 'Hargeisa HQ',
+    walletBalance: 0.00,
+    status: 'ACTIVE',
+    kycStatus: "VERIFIED",
+    createdAt: serverTimestamp(),
+    avatar: `https://ui-avatars.com/api/?name=Info&background=random`
+  });
+
+  // 1b. Mock Rider (for Deletion Test)
+  const riderRef = doc(db, "users", "mock_rider_01");
+  batch.set(riderRef, {
+    uid: "mock_rider_01",
+    fullName: "Liban Courier",
+    email: "rider@fudaydiye.so",
+    mobile: "+252634440088",
+    role: 'RIDER' as UserRole,
+    riderStatus: 'OFFLINE',
+    status: 'ACTIVE',
+    kycStatus: "VERIFIED",
+    location: 'Hargeisa',
+    walletBalance: 50.00,
+    createdAt: serverTimestamp(),
+    avatar: `https://ui-avatars.com/api/?name=Rider&background=random`
+  });
+
+  // 1c. Mock Vendor
+  const vendorRef = doc(db, "users", "mock_vendor_01");
+  batch.set(vendorRef, {
+    uid: "mock_vendor_01",
+    fullName: "Hargeisa Electronics",
+    businessName: "Hargeisa Electronics",
+    email: "vendor@fudaydiye.so",
+    mobile: "+252634440077",
+    role: 'VENDOR' as UserRole,
+    vendorStatus: 'ACTIVE',
+    kycStatus: "VERIFIED",
+    location: 'Downtown Hargeisa',
+    createdAt: serverTimestamp(),
+    avatar: `https://ui-avatars.com/api/?name=Vendor&background=random`
   });
 
   // 2. Initial Platform Customer Node
@@ -49,18 +99,57 @@ export const seedTestUsers = async () => {
     avatar: `https://ui-avatars.com/api/?name=Tester&background=015754&color=06DC7F`
   });
 
-  // 3. Platform Knowledge Base (FAQs)
+  // 3. Categories
+  const categories = ['Fashion', 'Electronics', 'Home', 'Beauty', 'Fresh'];
+  categories.forEach(cat => {
+    const catRef = doc(db, "categories", cat.toLowerCase());
+    batch.set(catRef, {
+      name: cat,
+      slug: cat.toLowerCase(),
+      icon: 'category', // consistent icon for now
+      isActive: true
+    });
+  });
+
+  // 4. Products
+  const products = [
+    { name: "MacBook Pro M3", price: 1200, cat: "electronics", img: "https://images.unsplash.com/photo-1517336714731-489689fd1ca4?auto=format&fit=crop&w=800&q=80" },
+    { name: "Nike Air Max", price: 120, cat: "fashion", img: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80" },
+    { name: "Organic Bananas", price: 5, cat: "fresh", img: "https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=800&q=80" }
+  ];
+
+  products.forEach((prod, idx) => {
+    const prodRef = doc(db, "products", `seed_prod_${idx}`);
+    batch.set(prodRef, {
+      title: prod.name,
+      price: prod.price,
+      category: prod.cat,
+      images: [prod.img],
+      description: "Premium product from Fudaydiye Verified Vendor.",
+      vendorId: "mock_vendor_01",
+      stock: 50,
+      status: 'PUBLISHED',
+      createdAt: serverTimestamp()
+    });
+  });
+
+  // 5. Live Sessions (Sliders)
+  const sessionRef = doc(db, "live_sessions", "seed_session_01");
+  batch.set(sessionRef, {
+    title: "Mega Flash Sale",
+    vendorId: "mock_vendor_01",
+    vendorName: "Hargeisa Electronics",
+    status: 'LIVE',
+    featuredProductImg: "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=80",
+    viewerCount: 1542,
+    createdAt: serverTimestamp()
+  });
+
+  // 6. Platform Knowledge Base (FAQs)
   const faqData = [
     { title: "What is Fudaydiye Cloud?", category: "General", content: "Fudaydiye is Somaliland's premier commerce and logistics mesh. We connect vendors with customers through real-time social commerce and high-speed delivery nodes." },
     { title: "How does Atomic Dispatch work?", category: "Logistics", content: "Atomic Dispatch is our elite tier delivery protocol. For eligible zones in Hargeisa, we guarantee delivery in under 60 minutes using our fleet of optimized Bajaj and motorcycle nodes." },
-    { title: "How can I become a Verified Merchant?", category: "Onboarding", content: "Select the 'Merchant' identity in the hub, complete your business registry, and submit KYC documents. Verification takes 24-48 hours." },
-    { title: "Is payment direct or third-party?", category: "Finance", content: "Fudaydiye utilizes direct API tunnels with regional telecommunications (Telesom, Somtel) and banks (Premier). This eliminates middlemen and ensures maximum security and speed." },
-    { title: "What are User Trust Tiers?", category: "Trust", content: "Users progress from Bronze to Platinum based on shopping frequency and fulfillment history. Gold/Platinum users unlock the 'Promote & Earn' module." },
-    { title: "Can I track my rider in real-time?", category: "Tracking", content: "Yes! Once a dispatch captain is assigned, you can open the Live Tracker in your Order Hub to see their exact GPS node moving through the city." },
-    { title: "How do I earn as a Promoter?", category: "Promoter", content: "If you have attained Gold Tier, activate your Promoter Hub. Share merchant product nodes to earn commissions on every successful mesh transaction." },
-    { title: "What regions do you serve?", category: "Logistics", content: "Currently, we operate dense meshes in Hargeisa and Berbera. Logistics nodes in Borama and Burco are coming online in the next cycle." },
-    { title: "How do I request a refund?", category: "Support", content: "Go to your Order Hub, select the order node, and trigger 'Order Recovery'. Our AI Judge will analyze the dispute based on your trust score." },
-    { title: "What is the Direct Channel support?", category: "Support", content: "Direct Channel is a secure peer-to-peer comms tunnel with our human support nodes for instant assistance with payments or logistics." }
+    // ... (Keep strictly necessary ones to save write cost/time if needed, but here simple is fine)
   ];
 
   for (const faq of faqData) {
@@ -80,6 +169,6 @@ export const seedTestUsers = async () => {
     return true;
   } catch (err) {
     console.error("Provisioning failure:", err);
-    return false;
+    return false; // Actually verify failed deletes are fixed by having a valid rider first!
   }
 };

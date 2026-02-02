@@ -17,7 +17,8 @@ let RolesGuard = class RolesGuard {
     constructor(reflector) {
         this.reflector = reflector;
     }
-    canActivate(context) {
+    async canActivate(context) {
+        var _a;
         const requiredRoles = this.reflector.getAllAndOverride(roles_decorator_1.ROLES_KEY, [
             context.getHandler(),
             context.getClass(),
@@ -26,13 +27,31 @@ let RolesGuard = class RolesGuard {
             return true;
         }
         const { user } = context.switchToHttp().getRequest();
-        // If no user attached (e.g. public route but roles decorator used by mistake?), allow?
-        // No, if roles are required, user must be authenticated.
-        // Ensure JwtAuthGuard runs first.
-        if (!user || !user.role) {
+        if (!user) {
             return false;
         }
-        return requiredRoles.some((role) => user.role === role);
+        // 1. Check Token Claims (Fast Path)
+        if (user.role && requiredRoles.some((role) => user.role === role)) {
+            return true;
+        }
+        // 2. Fallback: Check Firestore (Robus Path for Missing Claims)
+        try {
+            const admin = await Promise.resolve().then(() => require('firebase-admin'));
+            const db = admin.firestore();
+            const userDoc = await db.collection('users').doc(user.uid).get();
+            if (userDoc.exists) {
+                const dbRole = (_a = userDoc.data()) === null || _a === void 0 ? void 0 : _a.role;
+                if (requiredRoles.some((role) => dbRole === role)) {
+                    // Optional: Self-heal custom claims?
+                    // await admin.auth().setCustomUserClaims(user.uid, { role: dbRole });
+                    return true;
+                }
+            }
+        }
+        catch (e) {
+            console.error('RolesGuard Firestore Fallback Error', e);
+        }
+        return false;
     }
 };
 RolesGuard = __decorate([

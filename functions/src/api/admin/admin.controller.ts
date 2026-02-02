@@ -10,7 +10,7 @@ import { User } from '../common/decorators/user.decorator';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.FUDAYDIYE_ADMIN)
+@Roles(UserRole.FUDAYDIYE_ADMIN, UserRole.SUPER_ADMIN)
 export class AdminController {
     constructor(private readonly adminService: AdminService) { }
 

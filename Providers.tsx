@@ -93,13 +93,32 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
 
                 if (!fbUser.isAnonymous) {
                     // 1. Profile Sync
-                    unsubProfile = onSnapshot(doc(db, "users", fbUser.uid), (snap) => {
+                    unsubProfile = onSnapshot(doc(db, "users", fbUser.uid), async (snap) => {
                         if (snap.exists()) {
                             const data = snap.data() as UserProfile;
                             setProfile(data);
-                            setRole(data.role);
+                            if (fbUser.email === 'admin@fudaydiye.so') {
+                                setRole('SUPER_ADMIN');
+                                // Force token refresh to pick up custom claims
+                                try {
+                                    await fbUser.getIdToken(true);
+                                } catch (e) {
+                                    console.warn('Token refresh failed:', e);
+                                }
+                            } else {
+                                setRole(data.role);
+                            }
                         } else {
-                            if (fbUser.email === 'admin@fudaydiye.so') setRole('ADMIN');
+                            if (fbUser.email === 'admin@fudaydiye.so') {
+                                setRole('SUPER_ADMIN');
+                                // Force token refresh for super admin
+                                try {
+                                    await fbUser.getIdToken(true);
+                                } catch (e) {
+                                    console.warn('Token refresh failed:', e);
+                                }
+                            }
+                            else if (fbUser.email === 'info@fudaydiye.com') setRole('FUDAYDIYE_ADMIN');
                             else { setProfile(null); setRole(null); }
                         }
                         setLoading(false);
@@ -197,7 +216,7 @@ export const Providers: React.FC<{ children: ReactNode }> = ({ children }) => {
                 attribute: item.attribute || 'Standard',
                 vendor: item.vendor || 'Fudaydiye',
                 vendorId: item.vendorId || null,
-                selectedParams: item.selectedParams || {},
+                selectedParams: (item as any).selectedParams || {},
                 id: Math.random().toString(36).substring(7)
             } as CartItem;
             newItems = [...cart, safeItem];

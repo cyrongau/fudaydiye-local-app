@@ -2,9 +2,7 @@ import axios from 'axios';
 import { auth } from '../../lib/firebase'; // Adjust path if needed
 
 // Development URL vs Production URL
-// const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/fudaydiye-commerce/us-central1/api';
-// Using the standard emulator/cloud functions URL pattern for now
-const BASE_URL = 'http://localhost:5001/fudaydiye-commerce/us-central1/api';
+const BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'https://us-central1-fudaydiye-commerce.cloudfunctions.net/api');
 
 export const api = axios.create({
     baseURL: BASE_URL,

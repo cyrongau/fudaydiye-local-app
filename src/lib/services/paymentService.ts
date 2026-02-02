@@ -65,11 +65,25 @@ export class PaymentService {
     }
 
     /**
-     * Get current exchange rate (Mock for now, can be connected to real API or Firestore)
+     * Get current exchange rate
      */
     async getExchangeRate(): Promise<number> {
-        // In future, fetch from 'settings/exchange' doc
-        return 26000; // 1 USD = 26,000 SLSH
+        try {
+            const { doc, getDoc } = await import('firebase/firestore');
+            const { db } = await import('../../../lib/firebase');
+
+            const docRef = doc(db, 'system_config', 'global');
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                return data.settings?.exchangeRate || 8500;
+            }
+            return 8500; // Fallback
+        } catch (error) {
+            console.error("Error fetching exchange rate:", error);
+            return 8500; // Fallback on error
+        }
     }
 }
 

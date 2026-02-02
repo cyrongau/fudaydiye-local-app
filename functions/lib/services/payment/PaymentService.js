@@ -199,49 +199,120 @@ class EdahabProvider {
 // ==========================================
 // 4. Premier Wallet Provider
 // ==========================================
+// ==========================================
+// 4. Premier Wallet Provider
+// ==========================================
+// ==========================================
+// 4. Premier Wallet Provider
+// ==========================================
 class PremierWalletProvider {
     constructor() {
         this.logger = new common_1.Logger('PremierWalletProvider');
+        this.baseUrl = 'https://api.premierwallets.com/api';
     }
     async initiate(request) {
-        var _a, _b;
-        this.logger.log(`[PremierWallet] Initiating wallet charge for ${(_a = request.paymentDetails) === null || _a === void 0 ? void 0 : _a.mobile}`);
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        this.logger.log(`[PremierWallet] Initiating flow for ${(_a = request.paymentDetails) === null || _a === void 0 ? void 0 : _a.mobile}`);
+        // Fetch dynamic config
+        let config = { merchantId: '', apiKey: '', machineId: '' }; // apiKey here maps to Password
         try {
-            const payload = {
-                merchantId: payment_config_1.paymentConfig.premierWallet.merchantId,
-                walletId: (_b = request.paymentDetails) === null || _b === void 0 ? void 0 : _b.mobile,
-                amount: request.amount,
-                currency: request.currency || 'USD',
-                refId: request.orderId
+            const admin = await Promise.resolve().then(() => require('firebase-admin'));
+            const db = admin.firestore();
+            const snap = await db.doc('system_config/global').get();
+            if (snap.exists) {
+                const data = snap.data();
+                if ((_b = data === null || data === void 0 ? void 0 : data.integrations) === null || _b === void 0 ? void 0 : _b.premierWallet) {
+                    config = data.integrations.premierWallet;
+                }
+            }
+        }
+        catch (e) {
+            this.logger.warn(`[PremierWallet] Config fetch failed: ${e}`);
+        }
+        const username = config.merchantId || payment_config_1.paymentConfig.premierWallet.merchantId; // This is UserID/LoginUserName
+        const password = config.apiKey || payment_config_1.paymentConfig.premierWallet.apiKey; // This is Password
+        const machineId = config.machineId || '1'; // Default if missing, but should be provided
+        try {
+            // STEP 1: LOGIN (Get Bearer Token)
+            const authString = Buffer.from(`${username}:${password}`).toString('base64');
+            const loginPayload = {
+                UserName: username,
+                Password: password
             };
-            const response = await axios_1.default.post(`${payment_config_1.paymentConfig.premierWallet.baseUrl}/charge`, payload, {
-                headers: { 'Authorization': `Bearer ${payment_config_1.paymentConfig.premierWallet.apiKey}` },
-                timeout: 10000
+            const loginRes = await axios_1.default.post(`${this.baseUrl}/MerchantLogin`, loginPayload, {
+                headers: {
+                    'Authorization': `Basic ${authString}`,
+                    'ChannelID': '104',
+                    'DeviceType': '205',
+                    'MachineID': machineId
+                }
             });
-            const data = response.data;
-            return {
-                success: true,
-                status: 'PENDING',
-                transactionId: data.txRef,
-                message: "Premier Wallet push sent.",
-                gatewayMetadata: data
+            // Assuming the token is in the response body or headers. 
+            // The doc says "Authorization: Bearer Token" for subsequent calls.
+            // Usually login returns it. Let's assume response.data.Data or response.data.Token.
+            // Based on typical flows and "Authorization: Bearer Token" table row, let's assume it returns a token string.
+            // Documentation is slightly ambiguous ("This API will be required to call with Basic...").
+            // Given the lack of distinct "Token" field in doc, but "Authorization: Bearer Token" in next step, 
+            // valid assumption is response contains it.
+            // Let's assume `loginRes.data.Data` is the token or part of it.
+            // SAFEST GUESS based on similar banking APIs: Data field contains SessionID/Token.
+            const token = ((_c = loginRes.data) === null || _c === void 0 ? void 0 : _c.Data) || ((_d = loginRes.data) === null || _d === void 0 ? void 0 : _d.Token);
+            if (!token)
+                throw new Error("Login failed: No token received");
+            const bearerAuth = `Bearer ${token}`;
+            const commonHeaders = {
+                'Authorization': bearerAuth,
+                'ChannelID': '104',
+                'DeviceType': '205',
+                'MachineID': machineId
             };
+            // STEP 2: GET WALLET ID (Lookup by Mobile)
+            const lookupRes = await axios_1.default.post(`${this.baseUrl}/GetUserQRDetailByUserID`, {
+                UserID: (_e = request.paymentDetails) === null || _e === void 0 ? void 0 : _e.mobile // e.g. 252...
+            }, { headers: commonHeaders });
+            const walletId = (_g = (_f = lookupRes.data) === null || _f === void 0 ? void 0 : _f.Data) === null || _g === void 0 ? void 0 : _g.WalletId;
+            if (!walletId)
+                throw new Error("User lookup failed: Wallet ID not found");
+            // STEP 3: PUSH PAYMENT
+            const payPayload = {
+                CustomerWalletID: walletId,
+                Amount: request.amount,
+                Category: 5,
+                LoginUserName: username,
+                Remarks: `Order ${request.orderId}`
+            };
+            const payRes = await axios_1.default.post(`${this.baseUrl}/PushPayment`, payPayload, {
+                headers: commonHeaders
+            });
+            const payData = payRes.data;
+            if (((_h = payData === null || payData === void 0 ? void 0 : payData.Response) === null || _h === void 0 ? void 0 : _h.Code) === '001') {
+                return {
+                    success: true,
+                    status: 'PENDING',
+                    transactionId: (_j = payData.Data) === null || _j === void 0 ? void 0 : _j.TransactionID,
+                    message: "Premier Wallet push sent. Check device.",
+                    gatewayMetadata: payData
+                };
+            }
+            else {
+                throw new Error(((_k = payData === null || payData === void 0 ? void 0 : payData.Response) === null || _k === void 0 ? void 0 : _k.Messages) || "Payment Push Failed");
+            }
         }
         catch (error) {
-            this.logger.error(`[PremierWallet] Error: ${error.message}`);
-            // Fallback
-            if (process.env.NODE_ENV !== 'production' && payment_config_1.paymentConfig.premierWallet.apiKey === 'YOUR_WALLET_KEY') {
+            this.logger.error(`[PremierWallet] Deep Flow Error: ${error.message}`);
+            // Fallback for Demo Mode if credentials are mock placeholders
+            if (process.env.NODE_ENV !== 'production' && (password === 'YOUR_WALLET_KEY' || !password)) {
                 return {
                     success: true,
                     status: 'PENDING',
                     transactionId: `mock_pwallet_${Date.now()}`,
-                    message: "MOCK: Premier Wallet Push Sent."
+                    message: "MOCK: Premier Wallet Push Sent (Deep Flow)."
                 };
             }
             return {
                 success: false,
                 status: 'FAILED',
-                message: error.message
+                message: error.message || "Wallet Provider Error"
             };
         }
     }

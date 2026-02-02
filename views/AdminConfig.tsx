@@ -17,6 +17,7 @@ const AdminConfig: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSyncingClaims, setIsSyncingClaims] = useState(false);
 
   const [settings, setSettings] = useState({
     commission: 10,
@@ -31,6 +32,7 @@ const AdminConfig: React.FC = () => {
     golis: { apiKey: '', endpoint: '', active: false },
     hormuud: { apiKey: '', endpoint: '', active: false },
     premierBank: { merchantId: '', apiKey: '', endpoint: '', active: false },
+    premierWallet: { merchantId: '', apiKey: '', machineId: '', active: false }, // Added machineId
     maps: { apiKey: '', active: false },
     agora: { appId: '', certificate: '', active: false },
     livekit: { apiKey: '', apiSecret: '', host: '', active: false },
@@ -74,6 +76,7 @@ const AdminConfig: React.FC = () => {
               ...prev,
               ...data.integrations,
               // Ensure structural integrity for deep keys if missing in fetched data
+              premierWallet: data.integrations.premierWallet || prev.premierWallet,
               amazonUae: data.integrations.amazonUae || prev.amazonUae,
               alibaba: data.integrations.alibaba || prev.alibaba,
               aliexpress: data.integrations.aliexpress || prev.aliexpress,
@@ -196,6 +199,20 @@ const AdminConfig: React.FC = () => {
     }
   };
 
+  const handleSyncClaims = async () => {
+    setIsSyncingClaims(true);
+    try {
+      const response = await api.post('/auth/bootstrap-claims');
+      toastSuccess('Custom claims synced! Please log out and back in to apply changes.');
+      console.log('Claims sync response:', response.data);
+    } catch (err: any) {
+      console.error("Sync Claims Error:", err);
+      toastError(`Sync Failed: ${err.response?.data?.message || err.message || 'Unknown error'}`);
+    } finally {
+      setIsSyncingClaims(false);
+    }
+  };
+
   const runAiAudit = async () => {
     setIsAiAuditing(true);
     try {
@@ -230,6 +247,15 @@ const AdminConfig: React.FC = () => {
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1">Ecosystem Control Hub</p>
           </div>
         </div>
+        <button
+          onClick={handleSyncClaims}
+          disabled={isSyncingClaims}
+          className="px-4 py-2 bg-blue-500/10 text-blue-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all flex items-center gap-2 disabled:opacity-50"
+          title="Sync your role from Firestore to Firebase custom claims"
+        >
+          {isSyncingClaims ? <span className="animate-spin material-symbols-outlined text-sm">sync</span> : <span className="material-symbols-outlined text-sm">verified_user</span>}
+          Sync Claims
+        </button>
         <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-xl overflow-x-auto no-scrollbar max-w-[300px] md:max-w-none">
           <button
             onClick={() => setActiveTab('BUSINESS')}
@@ -468,6 +494,20 @@ const AdminConfig: React.FC = () => {
                 <div className="space-y-4 pt-4">
                   <CredentialField label="Card Merchant ID" value={integrations.premierBank.merchantId} onChange={(val) => setIntegrations({ ...integrations, premierBank: { ...integrations.premierBank, merchantId: val } })} />
                   <CredentialField label="Public API Key" value={integrations.premierBank.apiKey} onChange={(val) => setIntegrations({ ...integrations, premierBank: { ...integrations.premierBank, apiKey: val } })} />
+                </div>
+              </IntegrationCard>
+
+              <IntegrationCard
+                name="Premier Wallet"
+                desc="Direct Mobile Wallet"
+                icon="account_balance"
+                active={integrations.premierWallet?.active}
+                onToggle={() => setIntegrations({ ...integrations, premierWallet: { ...integrations.premierWallet, active: !integrations.premierWallet?.active } })}
+              >
+                <div className="space-y-4 pt-4">
+                  <CredentialField label="Login User ID" value={integrations.premierWallet?.merchantId || ''} onChange={(val) => setIntegrations({ ...integrations, premierWallet: { ...integrations.premierWallet, merchantId: val } })} />
+                  <CredentialField label="Password" value={integrations.premierWallet?.apiKey || ''} onChange={(val) => setIntegrations({ ...integrations, premierWallet: { ...integrations.premierWallet, apiKey: val } })} isSecret />
+                  <CredentialField label="Machine ID" value={integrations.premierWallet?.machineId || ''} onChange={(val) => setIntegrations({ ...integrations, premierWallet: { ...integrations.premierWallet, machineId: val } })} />
                 </div>
               </IntegrationCard>
             </div>

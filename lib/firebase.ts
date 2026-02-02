@@ -16,9 +16,15 @@ const firebaseConfig = {
 };
 
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
+import { connectAuthEmulator } from "firebase/auth";
+import { connectFirestoreEmulator } from "firebase/firestore";
+import { connectStorageEmulator } from "firebase/storage";
+import { connectFunctionsEmulator } from "firebase/functions";
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+console.log("DEBUG: Active Firebase Project ID:", firebaseConfig.projectId);
+
 
 // Initialize App Check
 if (typeof window !== 'undefined') {
@@ -48,5 +54,15 @@ export const db = initializeFirestore(app, {
 
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
+
+
+// Connect to Emulators if on localhost
+// if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+//   // connectAuthEmulator(auth, "http://127.0.0.1:9099");
+//   // connectFirestoreEmulator(db, '127.0.0.1', 8080);
+//   // connectStorageEmulator(storage, '127.0.0.1', 9199);
+//   // connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+//   // console.log("Connected to Firebase Emulators");
+// }
 
 export default app;

@@ -6,7 +6,8 @@ export enum UserRole {
     RIDER = 'RIDER',
     CLIENT = 'CLIENT',
     ADMIN = 'ADMIN',
-    FUDAYDIYE_ADMIN = 'FUDAYDIYE_ADMIN'
+    FUDAYDIYE_ADMIN = 'FUDAYDIYE_ADMIN',
+    SUPER_ADMIN = 'SUPER_ADMIN'
 }
 
 export enum VendorStatus {

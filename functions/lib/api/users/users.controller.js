@@ -63,6 +63,11 @@ let UsersController = class UsersController {
         }
         return this.usersService.uploadKyc(uid, body);
     }
+    async syncMyClaims(req) {
+        // Self-service endpoint: sync custom claims from Firestore
+        const user = req.user;
+        return this.usersService.syncCustomClaims(user.uid);
+    }
 };
 __decorate([
     (0, common_1.Post)(),
@@ -144,6 +149,13 @@ __decorate([
     __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "uploadKyc", null);
+__decorate([
+    (0, common_1.Post)('me/sync-claims'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "syncMyClaims", null);
 UsersController = __decorate([
     (0, common_1.Controller)('users'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),

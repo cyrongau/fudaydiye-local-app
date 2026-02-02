@@ -31,9 +31,13 @@ const SavedAddresses: React.FC = () => {
       setLoading(true);
 
       // 1. Fetch API Key
-      const configSnap = await getDoc(doc(db, "system_config", "global"));
-      if (configSnap.exists()) {
-        setApiKey(configSnap.data()?.integrations?.maps?.apiKey || null);
+      try {
+        const configSnap = await getDoc(doc(db, "system_config", "global"));
+        if (configSnap.exists()) {
+          setApiKey(configSnap.data()?.integrations?.maps?.apiKey || null);
+        }
+      } catch (e) {
+        console.warn("Config access restricted", e);
       }
 
       // 2. Mock some initial manual addresses if none exist, 
@@ -74,7 +78,8 @@ const SavedAddresses: React.FC = () => {
             };
           });
         } catch (e) {
-          console.error("Order node fetch failed", e);
+          // Permission denied usually happens if user has no access to orders collection
+          console.warn("Automatic node derivation skipped:", e);
         }
       }
 

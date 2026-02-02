@@ -15,24 +15,29 @@ interface SidebarItem {
 
 const ADMIN_ITEMS: SidebarItem[] = [
   { icon: 'grid_view', path: '/admin', label: 'Health Center' },
-  { icon: 'hub', path: '/admin/config', label: 'Integrations' },
-  { icon: 'category', path: '/admin/categories', label: 'Taxonomy' },
-  { icon: 'bar_chart', path: '/admin/reports', label: 'Treasury' },
+  // { icon: 'hub', path: '/admin/config', label: 'Integrations' }, // Moved to SUPER_ADMIN only
+  { icon: 'category', path: '/admin/categories', label: 'Categories' }, // Was Taxonomy
+  { icon: 'bar_chart', path: '/admin/reports', label: 'Financials' }, // Was Treasury
   { icon: 'local_shipping', path: '/admin/logistics', label: 'Fleet Control' },
-  { icon: 'videocam', path: '/admin/live-moderation', label: 'Live Terminal' },
-  { icon: 'group', path: '/admin/users', label: 'Identity Nodes' },
+  { icon: 'price_change', path: '/admin/shipping', label: 'Shipping Rates' },
+  // { icon: 'videocam', path: '/admin/live-moderation', label: 'Live Terminal' }, // Hidden
+  { icon: 'group', path: '/admin/users', label: 'Users' }, // Was Identity Nodes
   { icon: 'two_wheeler', path: '/admin/riders', label: 'Riders' },
   { icon: 'article', path: '/admin/cms', label: 'CMS Terminal' },
   { icon: 'shopping_cart_off', path: '/admin/abandonment', label: 'Lost Leads' },
 ];
 
+const SUPER_ADMIN_ITEMS: SidebarItem[] = [
+  { icon: 'hub', path: '/admin/config', label: 'Integrations' },
+];
+
 const VENDOR_ITEMS: SidebarItem[] = [
-  { icon: 'grid_view', path: '/vendor', label: 'Command Center' },
-  { icon: 'videocam', path: '/vendor/live-sessions', label: 'Live Sessions' },
+  { icon: 'grid_view', path: '/vendor', label: 'Dashboard' }, // Was Command Center
+  // { icon: 'videocam', path: '/vendor/live-sessions', label: 'Live Sessions' }, // Hidden
   { icon: 'receipt_long', path: '/vendor/orders', label: 'Fulfillment' },
   { icon: 'inventory_2', path: '/vendor/management', label: 'Catalog' },
-  { icon: 'inventory', path: '/vendor/inventory', label: 'Stock Logic' },
-  { icon: 'bar_chart', path: '/vendor/analytics', label: 'Growth Engine' },
+  { icon: 'inventory', path: '/vendor/inventory', label: 'Inventory' }, // Was Stock Logic
+  { icon: 'bar_chart', path: '/vendor/analytics', label: 'Analytics' }, // Was Growth Engine
   { icon: 'account_balance_wallet', path: '/wallet', label: 'Earning Ledger' },
   { icon: 'hub', path: '/vendor/stores', label: 'Branches' },
   { icon: 'group', path: '/vendor/staff', label: 'Personnel' },
@@ -62,6 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
 
   // Move definitions outside or use stable constants
   const items = React.useMemo(() => {
+    if (role === 'SUPER_ADMIN') return [...ADMIN_ITEMS, ...SUPER_ADMIN_ITEMS, { icon: 'security', path: '/admin/audits', label: 'Security Log' }];
     if (role === 'ADMIN') return [...ADMIN_ITEMS, { icon: 'security', path: '/admin/audits', label: 'Security Log' }];
     if (role === 'VENDOR') return VENDOR_ITEMS;
     if (role === 'RIDER') return RIDER_ITEMS;
@@ -152,8 +158,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       <div className="flex flex-col gap-1.5 w-full px-3 border-t border-gray-50 dark:border-white/5 py-6 shrink-0">
         <button
           onClick={() => {
-            const basePath = role === 'FUDAYDIYE_ADMIN' ? '/vendor' : `/${role?.toLowerCase()}`;
-            navigate(`${basePath}/settings`);
+            if (role === 'SUPER_ADMIN') {
+              navigate('/admin/config');
+            } else {
+              const basePath = role === 'FUDAYDIYE_ADMIN' ? '/vendor' : `/${role?.toLowerCase()}`;
+              navigate(`${basePath}/settings`);
+            }
           }}
           className={`h-12 rounded-xl flex items-center px-3 w-full text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-all group relative overflow-hidden ${location.pathname.includes('settings') ? 'bg-gray-100 dark:bg-white/10' : ''}`}
         >

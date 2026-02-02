@@ -19,6 +19,7 @@ var UserRole;
     UserRole["CLIENT"] = "CLIENT";
     UserRole["ADMIN"] = "ADMIN";
     UserRole["FUDAYDIYE_ADMIN"] = "FUDAYDIYE_ADMIN";
+    UserRole["SUPER_ADMIN"] = "SUPER_ADMIN";
 })(UserRole = exports.UserRole || (exports.UserRole = {}));
 var VendorStatus;
 (function (VendorStatus) {

@@ -5,7 +5,6 @@ import { useAuth } from '../Providers';
 import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Transaction } from '../types';
-import BottomNav from '../components/BottomNav';
 
 const RiderWallet: React.FC = () => {
   const navigate = useNavigate();
@@ -95,8 +94,8 @@ const RiderWallet: React.FC = () => {
         </section>
       </main>
 
-      <BottomNav />
-    </div>
+
+    </div >
   );
 };
 

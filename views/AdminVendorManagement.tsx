@@ -7,10 +7,18 @@ import { userService } from '../src/lib/services/userService';
 
 import SystemAlert from '../components/SystemAlert';
 import { AuditService } from '../lib/auditService';
+import CreateUserModal from '../components/CreateUserModal';
+import { useAuth } from '../Providers';
 
 const AdminVendorManagement: React.FC = () => {
   const navigate = useNavigate();
+  const { user: currentUserData, role: currentUserRole } = useAuth();
+  // Construct a minimal currentUser object for role checking
+  const isSuperAdmin = currentUserRole === 'SUPER_ADMIN' || currentUserData?.email === 'admin@fudaydiye.so';
+  const currentUser = { role: currentUserRole };
+
   const [roleFilter, setRoleFilter] = useState<'VENDOR' | 'RIDER' | 'CUSTOMER' | 'CLIENT' | 'ADMIN' | 'FUDAYDIYE_ADMIN'>('VENDOR');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'VERIFIED' | 'PENDING' | 'SUSPENDED'>('ALL');
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,6 +179,18 @@ const AdminVendorManagement: React.FC = () => {
         customSlot={alertConfig.customSlot}
       />
 
+      <CreateUserModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={() => {
+          // refresh
+          const current = roleFilter;
+          setRoleFilter('CUSTOMER'); // toggle to force refresh or call fetch directly if extracted
+          setTimeout(() => setRoleFilter(current), 100);
+          showAlert('User Created', 'New user has been initialized.', 'SUCCESS');
+        }}
+      />
+
       <header className="sticky top-0 z-50 bg-white/80 dark:bg-surface-dark/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 px-6 py-4 flex items-center gap-4">
         <button onClick={() => navigate(-1)} className="size-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/5 active:scale-90 transition-all">
           <span className="material-symbols-outlined text-secondary dark:text-white">arrow_back</span>
@@ -179,16 +199,24 @@ const AdminVendorManagement: React.FC = () => {
           <h1 className="text-xl font-black text-secondary dark:text-primary tracking-tighter leading-none">User Management</h1>
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1">Governance & Compliance</p>
         </div>
+        <button
+          onClick={() => setIsCreateModalOpen(true)}
+          className="h-10 px-6 bg-primary text-secondary rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 whitespace-nowrap ml-auto"
+        >
+          <span className="material-symbols-outlined text-lg">add</span>
+          New User
+        </button>
       </header>
 
       <main className="p-6 flex-1 flex flex-col gap-8 overflow-y-auto pb-10 no-scrollbar animate-in fade-in duration-500">
 
         {/* Role Filter Pills */}
         <div className="bg-white dark:bg-surface-dark p-2 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex gap-2 overflow-x-auto no-scrollbar">
-          {(['VENDOR', 'RIDER', 'CLIENT', 'CUSTOMER', 'ADMIN', 'FUDAYDIYE_ADMIN'] as const).map(role => (
+          {/* Removed CLIENT, Restricted ADMINs to SUPER_ADMIN */}
+          {(['VENDOR', 'RIDER', 'CUSTOMER', ...(isSuperAdmin ? ['ADMIN', 'FUDAYDIYE_ADMIN'] : [])] as const).map((role) => (
             <button
               key={role}
-              onClick={() => setRoleFilter(role)}
+              onClick={() => setRoleFilter(role as any)}
               className={`flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${roleFilter === role
                 ? 'bg-secondary text-primary shadow-md'
                 : 'bg-gray-50 dark:bg-white/5 text-gray-400 hover:bg-gray-100'

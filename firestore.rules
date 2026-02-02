@@ -186,6 +186,16 @@ service cloud.firestore {
       }
     }
 
+    // 15. Shipping Zones
+    match /shipping_zones/{zoneId} {
+      allow read: if true;
+      allow write: if isSignedIn() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'FUDAYDIYE_ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+      );
+    }
+
     // Default Deny
     match /{document=**} {
       allow read, write: if false;

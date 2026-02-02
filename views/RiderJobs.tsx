@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import BottomNav from '../components/BottomNav';
 import { collection, query, where, onSnapshot, updateDoc, doc, serverTimestamp, addDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Order } from '../types';
@@ -259,7 +258,6 @@ const RiderJobs: React.FC = () => {
           </div>
         )}
       </main>
-      <BottomNav />
     </div >
   );
 };

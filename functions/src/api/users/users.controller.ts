@@ -78,4 +78,11 @@ export class UsersController {
         }
         return this.usersService.uploadKyc(uid, body);
     }
+
+    @Post('me/sync-claims')
+    async syncMyClaims(@Req() req: any) {
+        // Self-service endpoint: sync custom claims from Firestore
+        const user = req.user;
+        return this.usersService.syncCustomClaims(user.uid);
+    }
 }

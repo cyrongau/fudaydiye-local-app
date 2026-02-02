@@ -229,6 +229,33 @@ let UsersService = UsersService_1 = class UsersService {
             throw new common_1.InternalServerErrorException('Failed to upload KYC');
         }
     }
+    async syncCustomClaims(uid) {
+        try {
+            // Fetch user's role from Firestore
+            const userDoc = await this.db.collection('users').doc(uid).get();
+            if (!userDoc.exists) {
+                throw new common_1.NotFoundException(`User ${uid} not found in Firestore`);
+            }
+            const userData = userDoc.data();
+            const role = userData === null || userData === void 0 ? void 0 : userData.role;
+            if (!role) {
+                this.logger.warn(`User ${uid} has no role in Firestore`);
+                return { success: false, message: 'No role found in Firestore' };
+            }
+            // Set custom claims
+            await this.auth.setCustomUserClaims(uid, { role });
+            this.logger.log(`Synced custom claims for ${uid}: role=${role}`);
+            return {
+                success: true,
+                role,
+                message: 'Custom claims synced. Please refresh your token (log out and back in) to apply changes.'
+            };
+        }
+        catch (error) {
+            this.logger.error(`Failed to sync custom claims for ${uid}`, error);
+            throw new common_1.InternalServerErrorException('Failed to sync custom claims');
+        }
+    }
 };
 UsersService = UsersService_1 = __decorate([
     (0, common_1.Injectable)()

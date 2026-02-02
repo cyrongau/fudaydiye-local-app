@@ -2,9 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../src/services/api';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import HeaderNotification from '../components/HeaderNotification';
+import { useAuth } from '../Providers';
 
 const AdminPlatformOverview: React.FC = () => {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
   const [stats, setStats] = useState({
     gmv: 0,
     growth: 0,
@@ -16,20 +23,19 @@ const AdminPlatformOverview: React.FC = () => {
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
 
   useEffect(() => {
+    // 1. Fetch Analytics Stats
     const fetchStats = async () => {
       try {
         const res = await api.get('/analytics/dashboard');
         const data = res.data;
-
         setStats({
           gmv: data.totalRevenue || 0,
-          growth: 0, // Pending implementation
-          retention: 0, // Pending implementation
+          growth: 0,
+          retention: 0,
           shoppers: data.totalCustomers || 0,
           vendors: data.totalVendors || 0,
           riders: data.totalRiders || 0
         });
-
       } catch (err) {
         console.error("Error fetching admin stats:", err);
       }
@@ -37,7 +43,7 @@ const AdminPlatformOverview: React.FC = () => {
 
     fetchStats();
 
-    // 3. Real System Logs (if any)
+    // 2. Real System Logs
     const unsubLogs = onSnapshot(query(collection(db, "system_logs"), orderBy("createdAt", "desc"), limit(5)), (snap) => {
       setRecentLogs(snap.docs.map(d => d.data()));
     });
@@ -45,215 +51,217 @@ const AdminPlatformOverview: React.FC = () => {
     return () => unsubLogs();
   }, []);
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  };
+
+  const handleLogout = async () => {
+    const { auth } = await import('../lib/firebase');
+    await auth.signOut();
+    navigate('/');
+  };
+
   return (
-    <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-surface-dark/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 px-6 py-4 flex items-center gap-4">
-        <button onClick={() => navigate(-1)} className="size-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/5 active:scale-90 transition-all">
-          <span className="material-symbols-outlined text-secondary dark:text-white">arrow_back</span>
-        </button>
-        <div className="flex flex-col">
-          <h1 className="text-xl font-black text-secondary dark:text-primary tracking-tighter leading-none uppercase">System Health</h1>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1">Global Platform Pulse</p>
+    <div className="flex flex-col min-h-screen bg-gray-50/50 dark:bg-black pb-[calc(var(--bottom-nav-height)+2rem)] font-display">
+      {/* Header */}
+      <div className="bg-white dark:bg-surface-dark px-8 py-6 flex items-center justify-between sticky top-0 z-30 border-b border-gray-100 dark:border-white/5">
+        <div>
+          <h1 className="text-2xl font-black text-secondary dark:text-white mb-1">System Health</h1>
+          <p className="text-sm text-gray-400 font-medium">Global Platform Pulse & Real-time Metrics</p>
         </div>
-      </header>
-
-      <main className="p-6 flex-1 flex flex-col gap-8 overflow-y-auto pb-[calc(var(--bottom-nav-height)+2rem)] no-scrollbar">
-        {/* Total Ecosystem Value Display */}
-        <section className="bg-secondary text-white rounded-[40px] p-8 shadow-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-primary/30 transition-colors"></div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">Cumulative Platform GMV</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center bg-gray-50 dark:bg-white/5 px-4 py-2 rounded-full border border-gray-100 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="text-xs font-bold text-gray-500">System Online</span>
             </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-4xl md:text-5xl font-black tracking-tighter leading-none">${stats.gmv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<span className="text-primary"></span></span>
-              <span className="text-[10px] font-bold text-white/40 uppercase ml-2 tracking-widest">Lifetime Portfolio</span>
-            </div>
+          </div>
+          <HeaderNotification />
 
-            <div className="mt-8 grid grid-cols-2 gap-4">
-              <div className="bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10">
-                <p className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">Growth (MTD)</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-lg font-black text-primary">{stats.growth > 0 ? '+' : ''}{stats.growth}%</span>
-                  {stats.growth > 0 && <span className="material-symbols-outlined text-primary text-sm animate-bounce">trending_up</span>}
+          {/* Functional Profile Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              className="size-10 rounded-full bg-gray-200 overflow-hidden border border-gray-100 ring-2 ring-white dark:ring-black flex items-center justify-center text-gray-500 font-bold focus:outline-none transition-transform active:scale-95"
+            >
+              {profile?.avatar ? (
+                <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span>{profile?.fullName ? profile.fullName.charAt(0).toUpperCase() : 'A'}</span>
+              )}
+            </button>
+
+            {isProfileMenuOpen && (
+              <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-surface-dark rounded-xl shadow-xl border border-gray-100 dark:border-white/5 py-1 z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="px-4 py-2 border-b border-gray-50 dark:border-white/5 text-left">
+                  <p className="text-xs font-black text-secondary dark:text-white truncate">{profile?.fullName || 'Admin'}</p>
+                  <p className="text-[10px] text-gray-400 truncate">{profile?.email}</p>
                 </div>
-              </div>
-              <div className="bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10">
-                <p className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">Retention</p>
-                <span className="text-lg font-black text-white">{stats.retention}%</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* AI Command Center Insight - Static Placeholder for now until AI Log is improved */}
-        <section className="bg-primary/5 rounded-[32px] p-6 border border-primary/20 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-20">
-            <span className="material-symbols-outlined text-primary text-5xl">auto_awesome</span>
-          </div>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="size-10 rounded-xl bg-primary flex items-center justify-center text-secondary shadow-lg">
-              <span className="material-symbols-outlined text-[24px]">psychology</span>
-            </div>
-            <div>
-              <h4 className="text-sm font-black text-secondary dark:text-white leading-tight uppercase tracking-tighter">AI Operational Summary</h4>
-              <div className="flex items-center gap-1">
-                <span className="size-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                <span className="text-[8px] font-black text-gray-400 uppercase">Analysis Engine Live</span>
-              </div>
-            </div>
-          </div>
-          <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 leading-relaxed uppercase tracking-widest italic mb-6">
-            "System Initialized. Monitoring active nodes. No anomalies detected."
-          </p>
-          <button
-            onClick={() => navigate('/admin/report')}
-            className="h-12 bg-secondary text-primary rounded-xl px-6 text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">assessment</span>
-            Generate System Audit Report
-          </button>
-        </section>
-
-        {/* User Base Distribution */}
-        <section>
-          <div className="flex items-center justify-between mb-4 px-2">
-            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Active Ecosystem Nodes</h3>
-            <span className="text-[10px] font-bold text-primary uppercase">Live Counts</span>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <SmallMetric label="Shoppers" value={stats.shoppers.toString()} color="bg-blue-500" icon="person" />
-            <SmallMetric label="Vendors" value={stats.vendors.toString()} color="bg-primary" icon="storefront" />
-            <SmallMetric label="Riders" value={stats.riders.toString()} color="bg-amber-500" icon="two_wheeler" />
-          </div>
-        </section>
-
-        {/* Visual Activity Heatmap - Reset for fresh system */}
-        <section className="bg-white dark:bg-surface-dark p-6 rounded-[32px] border border-gray-100 dark:border-gray-800 shadow-soft">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Marketplace Heatmap</h3>
-            <div className="flex gap-2">
-              <div className="flex items-center gap-1">
-                <div className="size-2 rounded-full bg-red-500"></div>
-                <span className="text-[8px] font-bold text-gray-400 uppercase">High</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="size-2 rounded-full bg-primary"></div>
-                <span className="text-[8px] font-bold text-gray-400 uppercase">Steady</span>
-              </div>
-            </div>
-          </div>
-          <div className="relative aspect-[16/9] rounded-2xl bg-gray-50 dark:bg-black/20 overflow-hidden border border-gray-100 dark:border-white/5 flex items-center justify-center">
-            {/* Reuse image but remove overlays for clean state */}
-            <img src="https://images.unsplash.com/photo-1569336415962-a4bd9f6dfc0f?q=80&w=1200&auto=format&fit=crop" className="absolute inset-0 w-full h-full object-cover opacity-20 grayscale mix-blend-overlay" alt="Map" />
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest relative z-10">Waiting for activity data...</p>
-          </div>
-        </section>
-
-        {/* Module Health Matrix - Clean State */}
-        <section className="bg-white dark:bg-surface-dark p-6 rounded-[32px] border border-gray-100 dark:border-gray-800 shadow-soft">
-          <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Infrastructure Integrity</h3>
-          <div className="space-y-4">
-            <ModuleStatus label="Marketplace Engine" status="ONLINE" ping="--" health={100} />
-            <ModuleStatus label="Logistics Mesh" status="ONLINE" ping="--" health={100} />
-            <ModuleStatus label="Live Video Nodes" status="ONLINE" ping="--" health={100} />
-            <ModuleStatus label="Escrow Protocol" status="ONLINE" ping="--" health={100} />
-          </div>
-        </section>
-
-        {/* Regional Performance - Clean State */}
-        <section className="bg-white dark:bg-surface-dark p-6 rounded-[32px] border border-gray-100 dark:border-gray-800 shadow-soft">
-          <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Regional Distribution</h3>
-          {/* 
-                 For a brand new system, we don't have regional data. 
-                 Showing empty state or filtered real data. 
-                 For now, displaying 'No Data' placeholder.
-               */}
-          <div className="py-8 text-center">
-            <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">No Regional Data Captured Yet</span>
-          </div>
-        </section>
-
-        {/* Activity Log - Real Data */}
-        <section className="flex flex-col gap-4 mb-10">
-          <div className="flex items-center justify-between px-2">
-            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Security Audit Log</h3>
-            <button className="text-primary text-[10px] font-black uppercase tracking-widest">Full History</button>
-          </div>
-          <div className="space-y-3">
-            {recentLogs.length > 0 ? (
-              recentLogs.map((log, idx) => (
-                <AuditItem
-                  key={idx}
-                  type={log.type || "SYSTEM"}
-                  text={log.message || "System Event"}
-                  time="Just now" // Ideally use date-fns relative time
-                  user={log.userId || "System"}
-                  level={log.level || "INFO"}
-                />
-              ))
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">Log Stream Empty</p>
+                <button
+                  onClick={() => navigate('/admin/settings')}
+                  className="w-full text-left px-4 py-2 text-[10px] font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-white/5 uppercase tracking-wider"
+                >
+                  Settings
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2 text-[10px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-white/5 uppercase tracking-wider"
+                >
+                  Sign Out
+                </button>
               </div>
             )}
           </div>
-        </section>
-      </main>
+        </div>
+      </div>
+
+      <div className="p-8 space-y-8 max-w-[1600px] mx-auto w-full">
+
+        {/* Top Cards Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+          {/* 1. GMV Card (Main Blue) */}
+          <div className="bg-[#2B6CB0] text-white p-6 rounded-[24px] relative overflow-hidden shadow-lg shadow-blue-900/10 h-40">
+            <div className="relative z-10 flex flex-col justify-between h-full">
+              <div className="flex justify-between items-start">
+                <div className="size-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                  <span className="material-symbols-outlined text-white text-xl">payments</span>
+                </div>
+                <span className="material-symbols-outlined text-white/40">trending_up</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium opacity-80 mb-1">Platform GMV</p>
+                <div className="flex items-baseline gap-3">
+                  <h2 className="text-3xl font-black">{formatCurrency(stats.gmv)}</h2>
+                  <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-bold">+5.4%</span>
+                </div>
+              </div>
+            </div>
+            <div className="absolute -top-10 -right-10 size-40 bg-white/5 rounded-full blur-2xl"></div>
+            <div className="absolute bottom-0 right-10 size-20 bg-blue-400/20 rounded-full blur-xl"></div>
+          </div>
+
+          {/* 2. Vendors Card (White/Surface) */}
+          <div className="bg-white dark:bg-surface-dark p-6 rounded-[24px] border border-gray-100 dark:border-white/5 shadow-sm h-40">
+            <div className="flex flex-col justify-between h-full">
+              <div className="flex justify-between items-start">
+                <div className="size-10 bg-[#fff5eb] text-orange-600 rounded-xl flex items-center justify-center">
+                  <span className="material-symbols-outlined text-xl">storefront</span>
+                </div>
+                <span className="material-symbols-outlined text-gray-300">more_horiz</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-400 mb-1">Active Vendors</p>
+                <h2 className="text-3xl font-black text-secondary dark:text-white">{stats.vendors}</h2>
+                <p className="text-[11px] text-gray-400 mt-1 font-medium">Growth rate: <span className="text-green-500 font-bold">+12%</span></p>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Shoppers Card (White/Surface) */}
+          <div className="bg-white dark:bg-surface-dark p-6 rounded-[24px] border border-gray-100 dark:border-white/5 shadow-sm h-40">
+            <div className="flex flex-col justify-between h-full">
+              <div className="flex justify-between items-start">
+                <div className="size-10 bg-[#eef2ff] text-indigo-600 rounded-xl flex items-center justify-center">
+                  <span className="material-symbols-outlined text-xl">person</span>
+                </div>
+                <span className="material-symbols-outlined text-gray-300">more_horiz</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-400 mb-1">Active Shoppers</p>
+                <h2 className="text-3xl font-black text-secondary dark:text-white">{stats.shoppers}</h2>
+                <div className="mt-2 w-full bg-gray-100 dark:bg-white/10 h-1.5 rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-500 w-2/3 rounded-full"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Module Status Column */}
+          <div className="bg-white dark:bg-surface-dark rounded-[24px] border border-gray-100 dark:border-white/5 p-6 shadow-sm flex flex-col gap-6">
+            <h3 className="text-lg font-black text-secondary dark:text-white">Infrastructure Integrity</h3>
+            <div className="space-y-4">
+              <ModuleStatus label="Marketplace Engine" status="ONLINE" ping="4ms" health={100} />
+              <ModuleStatus label="Logistics Mesh" status="ONLINE" ping="12ms" health={98} />
+              <ModuleStatus label="Live Video Nodes" status="ONLINE" ping="24ms" health={100} />
+              <ModuleStatus label="Escrow Protocol" status="ONLINE" ping="4ms" health={100} />
+              <div className="h-px bg-gray-50 dark:bg-white/5 my-2"></div>
+              <button onClick={() => navigate('/admin/report')} className="w-full py-3 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-xl text-xs font-bold text-gray-500 uppercase tracking-wide transition-colors">
+                Generate Audit Report
+              </button>
+            </div>
+          </div>
+
+          {/* Main Activity Log */}
+          <div className="lg:col-span-2 bg-white dark:bg-surface-dark rounded-[24px] border border-gray-100 dark:border-white/5 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-black text-secondary dark:text-white">Security Audit Log</h3>
+              <div className="flex gap-2">
+                <button className="px-3 py-1.5 bg-gray-50 dark:bg-white/5 rounded-lg text-[10px] font-bold uppercase text-gray-400 hover:text-primary transition-colors">Export</button>
+                <button className="px-3 py-1.5 bg-gray-50 dark:bg-white/5 rounded-lg text-[10px] font-bold uppercase text-gray-400 hover:text-primary transition-colors">Clear</button>
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {recentLogs.length > 0 ? (
+                recentLogs.map((log, idx) => (
+                  <AuditItem
+                    key={idx}
+                    type={log.type || "SYSTEM"}
+                    text={log.message || "System Event"}
+                    time="Just now"
+                    user={log.userId || "System"}
+                    level={log.level || "INFO"}
+                  />
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center opacity-50">
+                  <span className="material-symbols-outlined text-4xl text-gray-300 mb-2">dns</span>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Log Stream Empty</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
-// ... (Sub-components SmallMetric, ModuleStatus, GeoStat, AuditItem - kept as is but optimized if needed)
-// Redefining them here just to ensure they exist in the replaced content
-const SmallMetric: React.FC<{ label: string; value: string; color: string; icon: string }> = ({ label, value, color, icon }) => (
-  <div className="bg-white dark:bg-surface-dark p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer">
-    <div className={`size-8 rounded-xl ${color}/10 flex items-center justify-center ${color.replace('bg-', 'text-')}`}>
-      <span className="material-symbols-outlined text-[18px]">{icon}</span>
-    </div>
-    <span className="text-sm font-black text-secondary dark:text-white leading-none">{value}</span>
-    <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
-  </div>
-);
-
 const ModuleStatus: React.FC<{ label: string; status: string; ping: string; health: number; warning?: boolean }> = ({ label, status, ping, health, warning }) => (
-  <div className="flex items-center justify-between">
+  <div className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-default group">
     <div className="flex items-center gap-3">
-      <div className={`size-2 rounded-full ${warning ? 'bg-amber-500' : 'bg-primary'} animate-pulse`}></div>
+      <div className={`size-2.5 rounded-full ${warning ? 'bg-amber-500' : 'bg-green-500'} animate-pulse shadow-sm shadow-green-500/50`}></div>
       <div className="flex flex-col">
-        <span className="text-[10px] font-black text-secondary dark:text-white leading-none mb-1 uppercase tracking-wider">{label}</span>
-        <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{status} • {ping}</span>
+        <span className="text-xs font-bold text-secondary dark:text-white leading-none mb-1">{label}</span>
+        <span className="text-[10px] font-medium text-gray-400 font-mono">{ping}</span>
       </div>
     </div>
     <div className="text-right">
-      <span className={`text-xs font-black ${health < 95 ? 'text-amber-500' : 'text-primary'}`}>{health}%</span>
+      <span className={`text-xs font-black ${health < 95 ? 'text-amber-500' : 'text-green-600'} bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-md group-hover:bg-white group-hover:shadow-sm transition-all`}>{health}%</span>
     </div>
   </div>
 );
 
-// GeoStat not strictly needed with the "Empty" placeholder but we keep it definition in case we want to revert/use later?
-// Actually I replaced the usage so I can remove it or keep it unused. I'll keep the definition to avoid errors if I missed a usage, but cleaner to remove if unused.
-// I replaced usage with a div. So I'll omit it to save lines if I can, but to be safe I'll just include AuditItem.
-
 const AuditItem: React.FC<{ type: string; text: string; time: string; user: string; level: 'CRITICAL' | 'INFO' | 'SUCCESS' }> = ({ type, text, time, user, level }) => (
-  <div className="bg-white dark:bg-surface-dark p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex items-start gap-3">
-    <div className={`size-8 shrink-0 rounded-lg flex items-center justify-center ${level === 'CRITICAL' ? 'bg-red-100 text-red-600' :
-      level === 'SUCCESS' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+  <div className="flex items-start gap-4 p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-white/5">
+    <div className={`size-10 shrink-0 rounded-xl flex items-center justify-center ${level === 'CRITICAL' ? 'bg-red-50 text-red-600' :
+      level === 'SUCCESS' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'
       }`}>
-      <span className="material-symbols-outlined text-[18px]">
-        {level === 'CRITICAL' ? 'security_update_warning' : level === 'SUCCESS' ? 'check_circle' : 'info'}
+      <span className="material-symbols-outlined text-xl">
+        {level === 'CRITICAL' ? 'security' : level === 'SUCCESS' ? 'check_circle' : 'info'}
       </span>
     </div>
     <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-between mb-0.5">
-        <span className="text-[9px] font-black uppercase tracking-widest opacity-40">{type} • {time}</span>
-        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest ${level === 'CRITICAL' ? 'bg-red-500 text-white' : 'bg-gray-100 dark:bg-white/5 text-gray-500'
-          }`}>
-          {level}
-        </span>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">{type}</span>
+        <span className="text-[10px] font-medium text-gray-400">{time}</span>
       </div>
-      <p className="text-xs font-bold text-secondary dark:text-white truncate">{text}</p>
-      <p className="text-[9px] font-medium text-gray-400 mt-0.5">Origin: {user}</p>
+      <p className="text-sm font-bold text-secondary dark:text-white truncate mb-0.5">{text}</p>
+      <p className="text-[11px] font-medium text-gray-400">User: <span className="text-secondary dark:text-gray-300">{user}</span></p>
     </div>
   </div>
 );

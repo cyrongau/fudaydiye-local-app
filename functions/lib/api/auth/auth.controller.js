@@ -16,9 +16,12 @@ exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
 const auth_dto_1 = require("./dto/auth.dto");
+const jwt_auth_guard_1 = require("../common/guards/jwt-auth.guard");
+const users_service_1 = require("../users/users.service");
 let AuthController = class AuthController {
-    constructor(authService) {
+    constructor(authService, usersService) {
         this.authService = authService;
+        this.usersService = usersService;
     }
     requestOtp(requestOtpDto) {
         return this.authService.requestOtp(requestOtpDto);
@@ -28,6 +31,12 @@ let AuthController = class AuthController {
     }
     register(dto) {
         return this.authService.registerUser(dto);
+    }
+    async bootstrapClaims(req) {
+        // Bootstrap endpoint: only requires JWT auth, no role check
+        // Used for initial claims sync when user doesn't have role claims yet
+        const user = req.user;
+        return this.usersService.syncCustomClaims(user.uid);
     }
 };
 __decorate([
@@ -51,9 +60,18 @@ __decorate([
     __metadata("design:paramtypes", [auth_dto_1.RegisterUserDto]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "register", null);
+__decorate([
+    (0, common_1.Post)('bootstrap-claims'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "bootstrapClaims", null);
 AuthController = __decorate([
     (0, common_1.Controller)('auth'),
-    __metadata("design:paramtypes", [auth_service_1.AuthService])
+    __metadata("design:paramtypes", [auth_service_1.AuthService,
+        users_service_1.UsersService])
 ], AuthController);
 exports.AuthController = AuthController;
 //# sourceMappingURL=auth.controller.js.map
