@@ -71,7 +71,7 @@ export const api = functions
 
         // Handle preflight OPTIONS request
         if (req.method === 'OPTIONS') {
-            res.status(204).send('');
+            res.status(204).end();
             return;
         }
 
