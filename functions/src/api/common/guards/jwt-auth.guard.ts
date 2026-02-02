@@ -5,6 +5,12 @@ import * as admin from 'firebase-admin';
 export class JwtAuthGuard implements CanActivate {
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const request = context.switchToHttp().getRequest();
+
+        // Allow OPTIONS requests (CORS preflight) without authentication
+        if (request.method === 'OPTIONS') {
+            return true;
+        }
+
         const token = this.extractTokenFromHeader(request);
 
         if (!token) {
