@@ -4,6 +4,7 @@ exports.api = exports.onVendorSuspended = exports.onOrderCreated = void 0;
 const functions = require("firebase-functions/v1");
 // Force rebuild 17
 const admin = require("firebase-admin");
+const cors = require("cors");
 const CommunicationFactory_1 = require("./services/CommunicationFactory");
 // import { handleNestRequest } from './api/bootstrap'; // Moved to dynamic import
 // Initialize Firebase Admin (Singleton)
@@ -54,14 +55,30 @@ Object.defineProperty(exports, "onVendorSuspended", { enumerable: true, get: fun
 // - /orders (Create, Pay)
 // - /products (CUD)
 // - /auth (OTP Request, Verify)
+// Configure CORS middleware
+const corsHandler = cors({
+    origin: [
+        'https://fudaydiye.com',
+        'https://www.fudaydiye.com',
+        'https://fudaydiye-commerce-1097895058938.us-central1.run.app',
+        'https://fudaydiye-commerce.web.app',
+        'http://localhost:5173',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+});
 exports.api = functions
     .runWith({
     memory: '1GB',
     timeoutSeconds: 120,
 })
     .https.onRequest(async (req, res) => {
-    // Lazy load NestJS to prevent cold start timeouts during deployment/init
-    const { handleNestRequest } = await Promise.resolve().then(() => require('./api/bootstrap'));
-    return handleNestRequest(req, res);
+    // Apply CORS middleware
+    return corsHandler(req, res, async () => {
+        // Lazy load NestJS to prevent cold start timeouts during deployment/init
+        const { handleNestRequest } = await Promise.resolve().then(() => require('./api/bootstrap'));
+        return handleNestRequest(req, res);
+    });
 });
 //# sourceMappingURL=index.js.map
